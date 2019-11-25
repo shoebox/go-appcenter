@@ -17,12 +17,12 @@ var (
 	server     *httptest.Server
 )
 
-func openServer() {
+func openServer(APIKey string) {
 	mux = http.NewServeMux()
 	server = httptest.NewServer(mux)
 	url, _ := url.Parse(server.URL)
 
-	testClient = NewClient("test-key")
+	testClient = NewClient(APIKey)
 	testClient.BaseURL = url
 }
 

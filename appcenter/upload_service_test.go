@@ -4,11 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"mime"
 	"mime/multipart"
 	"net/http"
-	//	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -16,14 +14,14 @@ import (
 )
 
 const (
-	token    string = "AABBCCDDEE"
+	apiKey   string = "AABBCCDDEE"
 	uploadID string = "123-456-789"
 )
 
 var request = UploadRequest{
-	APIToken:  token,
 	AppName:   "app-name",
 	OwnerName: "owner",
+	FilePath:  "test",
 }
 
 var se404 = StatusError{
@@ -36,7 +34,7 @@ type handlerFunc func(t *testing.T, w http.ResponseWriter, r *http.Request)
 
 func handleSuccessFullReleaseUpload(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	validateMethod(t, r, http.MethodPost)
-	validateHeader(t, r, "X-API-Token", token)
+	validateHeader(t, r, "X-API-Token", apiKey)
 
 	resp := releaseUploadsResponse{uploadID, "http://" + r.Host + "/upload/file"}
 	json, _ := json.Marshal(resp)
@@ -45,7 +43,7 @@ func handleSuccessFullReleaseUpload(t *testing.T, w http.ResponseWriter, r *http
 
 func handleFailure404(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	validateMethod(t, r, http.MethodPost)
-	validateHeader(t, r, "X-API-Token", token)
+	validateHeader(t, r, "X-API-Token", apiKey)
 
 	b, _ := json.Marshal(se404)
 	w.WriteHeader(se404.StatusCode)
@@ -69,7 +67,7 @@ func setupServer(t *testing.T, hf handlerFunc) {
 
 func TestUploadRequestReleaseSuccess(t *testing.T) {
 	// setup:
-	openServer()
+	openServer(apiKey)
 	setupServer(t, handleSuccessFullReleaseUpload)
 	defer closeServer()
 
@@ -84,7 +82,7 @@ func TestUploadRequestReleaseSuccess(t *testing.T) {
 
 func TestUploadRequestShouldHandleFailure(t *testing.T) {
 	// setup:
-	openServer()
+	openServer(apiKey)
 	setupServer(t, handleFailure404)
 	defer closeServer()
 
@@ -98,13 +96,13 @@ func TestUploadRequestShouldHandleFailure(t *testing.T) {
 
 func TestUploadDo(t *testing.T) {
 	// setup:
-	openServer()
+	openServer(apiKey)
 	setupServer(t, handleSuccessFullReleaseUpload)
 	defer closeServer()
 
 	// when:
 	err := testClient.Upload.Do(request)
-	log.Println(err)
+	fmt.Println(err)
 }
 
 func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
@@ -125,6 +123,91 @@ func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
 			assert.Nil(t, err)
 
 			assert.EqualValues(t, string(b), fakePayload)
+		})
+	})
+}
+
+func TestValdationBuildVersionArgument(t *testing.T) {
+	r := UploadRequest{}
+
+	t.Run("When the build verson number is missing", func(t *testing.T) {
+		testCases := []struct {
+			ext          string
+			buildVersion string
+			buildNumber  string
+			err          bool
+		}{
+			{"zip", "", "", true},
+			{"zip", "1.2.3", "", false},
+			{"zip", "", "1", true},
+
+			{"msi", "", "", true},
+			{"msi", "1.2.3", "", false},
+			{"msi", "", "1", true},
+
+			{"apk", "", "", false},
+			{"apk", "1.2.3", "", false},
+			{"apk", "1.2.3", "1", false},
+			{"apk", "", "1", false},
+
+			{"pkg", "", "", true},
+			{"pkg", "1.2.3", "", true},
+			{"pkg", "", "1", true},
+			{"pkg", "1.2.3", "1", false},
+
+			{"dmg", "", "", true},
+			{"dmg", "1.2.3", "", true},
+			{"dmg", "", "1", true},
+			{"dmg", "1.2.3", "1", false},
+		}
+
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("For ext: %v BuildVersion: %v BuildNumber: %v",
+				tc.buildVersion, tc.buildNumber, tc.ext), func(t *testing.T) {
+
+				r.Option.BuildVersion = tc.buildVersion
+				r.Option.BuildNumber = tc.buildNumber
+
+				r.FilePath = fmt.Sprintf("toto.%v", tc.ext)
+				err := validateRequestBuildVersion(r)
+				if tc.err {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+			})
+		}
+	})
+}
+
+func handleUploadFailure(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	t.Run("Method should be POST", func(t *testing.T) {
+		validateMethod(t, r, http.MethodPost)
+	})
+	t.Run("API Should be present", func(t *testing.T) {
+		validateHeader(t, r, "X-API-Token", apiKey)
+	})
+
+	b, _ := json.Marshal(se404)
+
+	w.WriteHeader(http.StatusNotFound)
+	w.Write(b)
+}
+
+func TestShouldHandleErrorAfterUpload(t *testing.T) {
+	// setup:
+	openServer(apiKey)
+	setupServer(t, handleUploadFailure)
+	defer closeServer()
+
+	// when:
+	t.Run("When doing uploading request", func(t *testing.T) {
+		var response releaseUploadsResponse
+		resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
+
+		t.Run("Should report error", func(t *testing.T) {
+			assert.NotNil(t, resp.StatusError)
+			assert.Nil(t, err)
 		})
 	})
 }

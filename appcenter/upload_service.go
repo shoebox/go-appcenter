@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
 )
 
 // UploadService definition
@@ -25,15 +25,16 @@ type UploadRequest struct {
 	Option    ReleaseUploadPayload
 }
 
+// ReleaseUploadPayload wrap optional informations about the release
+type ReleaseUploadPayload struct {
+	ReleaseID    int    `json:"release_id,omitempty"`
+	BuildVersion string `json:"build_version,omitempty"`
+	BuildNumber  string `json:"build_number,omitempty"`
+}
+
 type releaseUploadsResponse struct {
 	UploadID  string `json:"upload_id"`
 	UploadURL string `json:"upload_url"`
-}
-
-type ReleaseUploadPayload struct {
-	ReleaseID    int    `json:"release_id"`
-	BuildVersion string `json:"build_version"`
-	BuildNumber  string `json:"build_number"`
 }
 
 func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploadsResponse) (*Response, error) {
@@ -61,29 +62,78 @@ func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploa
 }
 
 func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsResponse, error) {
-	fmt.Println("\tRequesting upload")
+	fmt.Println("\t", "Requesting upload")
 	var result releaseUploadsResponse
 	resp, err := s.releaseUploadsRequest(r, &result)
 	if err != nil {
 		return nil, err
 	}
 
-	// b, err := ioutil.ReadAll(resp.Body)
-	// log.Println(string(b))
+	if resp.Response.StatusCode < http.StatusOK || resp.Response.StatusCode > 299 {
+		return nil, fmt.Errorf("HTTP request failed: %s", resp.Status)
+	}
 
 	if resp.StatusError != nil {
 		return nil, fmt.Errorf("%v %s", resp.StatusError.StatusCode,
 			resp.StatusError.Code)
 	}
 
-	fmt.Println("\tUpload requested :", result.UploadID)
+	fmt.Println("\t", "Upload requested :", result.UploadID)
 
 	return &result, nil
 }
 
+func validateRequest(r UploadRequest) error {
+	//
+	err := validateSource(r)
+	if err != nil {
+		return err
+	}
+
+	//
+	err = validateRequestBuildVersion(r)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateSource(r UploadRequest) error {
+	_, err := os.Stat(r.FilePath)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("File `%v` does not exsts", r.FilePath)
+	}
+	return err
+}
+
+func validateRequestBuildVersion(r UploadRequest) error {
+	ext := filepath.Ext(r.FilePath)
+
+	if r.Option.BuildNumber == "" || r.Option.BuildVersion == "" {
+		if ext == ".pkg" || ext == ".dmg" {
+			return fmt.Errorf("'--build_version' and '--build_number' parameters "+
+				"must be specified to upload file of extension %v", ext)
+		}
+	}
+
+	if r.Option.BuildVersion == "" {
+		if ext == ".zip" || ext == ".msi" {
+			return fmt.Errorf("'--build_version' parameter must be "+
+				"specified to upload fle of extension '%v'", ext)
+		}
+	}
+
+	return nil
+}
+
 // Do start the upload request witht the provided parameters
 func (s *UploadService) Do(r UploadRequest) error {
-	fmt.Println("\tBeginning upload")
+	err := validateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("\t", "Beginning upload")
 	uploadResponse, err := s.doUploadRequest(r)
 	if err != nil {
 		return err
@@ -104,13 +154,9 @@ func (s *UploadService) Do(r UploadRequest) error {
 
 	// Upload body request
 	resp, err := s.client.client.Do(request)
-	if err != nil {
-		return err
-	}
 
 	if resp.StatusCode != http.StatusNoContent {
-		log.Panicln(resp.Status)
-		return nil
+		return fmt.Errorf("Upload failed : %s", resp.Status)
 	}
 
 	fmt.Println("\tUpload completed")
@@ -161,7 +207,6 @@ func (s *UploadService) uploadFileRequest(
 	paramName string,
 	path string,
 	handler io.Reader) (*http.Response, error) {
-	// file *os.File) (*http.Response, error) {
 
 	r, w := io.Pipe()
 	m := multipart.NewWriter(w)

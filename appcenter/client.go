@@ -11,11 +11,13 @@ import (
 )
 
 const (
+	// BaseURL AppCenter base URL for API calls
 	BaseURL = "https://api.appcenter.ms/v0.1"
 )
 
 var httpClient = &http.Client{}
 
+// Client structure
 type Client struct {
 	client *http.Client
 
@@ -26,28 +28,32 @@ type Client struct {
 	Upload *UploadService
 }
 
+// NewClient create a new instance of the client for the provided APIKey
 func NewClient(APIKey string) *Client {
-	baseUrl, err := url.Parse(BaseURL)
+	baseURL, err := url.Parse(BaseURL)
 	if err != nil {
 		log.Panic(err)
 	}
 
 	c := &Client{APIKey: APIKey}
-	c.BaseURL = baseUrl
+	c.BaseURL = baseURL
 	c.client = httpClient
 	c.Upload = &UploadService{client: c}
 	return c
 }
 
+// Response of request
 type Response struct {
 	*http.Response
 	*StatusError
 }
 
+// AppCenterError errors
 type AppCenterError struct {
 	Message string `json:"message"`
 }
 
+// StatusError is the generic reponse body in case of error from AppCenter
 type StatusError struct {
 	Code       string `json:Code`
 	StatusCode int    `json:StatusCode`

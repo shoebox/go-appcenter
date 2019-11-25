@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"goappcenter/appcenter"
-	"log"
 	"os"
 
 	"github.com/urfave/cli/v2"
@@ -59,11 +59,9 @@ func main() {
 		},
 	}
 
-	appcenter.NewClient("")
-
 	err := app.Run(os.Args)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println("\t", err)
 	}
 }
 
