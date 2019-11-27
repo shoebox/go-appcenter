@@ -55,9 +55,9 @@ type AppCenterError struct {
 
 // StatusError is the generic reponse body in case of error from AppCenter
 type StatusError struct {
-	Code       string `json:Code`
-	StatusCode int    `json:StatusCode`
-	Message    string `json:Message`
+	Code       string `json:"Code"`
+	StatusCode int    `json:"StatusCode"`
+	Message    string `json:"Message"`
 }
 
 func checkError(r *http.Response) *StatusError {
@@ -85,6 +85,7 @@ func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
 	}
 
 	defer func() {
+		//nolint:errcheck
 		io.CopyN(ioutil.Discard, resp.Body, 512)
 		resp.Body.Close()
 	}()
@@ -96,9 +97,16 @@ func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
 
 	if v != nil {
 		if w, ok := v.(io.Writer); ok {
-			io.Copy(w, resp.Body)
+			_, err := io.Copy(w, resp.Body)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			body, err := ioutil.ReadAll(response.Body)
+			if err != nil {
+				return nil, err
+			}
+
 			err = json.Unmarshal(body, &v)
 			if err == io.EOF {
 				err = nil // ignore EOF errors caused by empty response body

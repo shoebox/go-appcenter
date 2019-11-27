@@ -37,8 +37,12 @@ func handleSuccessFullReleaseUpload(t *testing.T, w http.ResponseWriter, r *http
 	validateHeader(t, r, "X-API-Token", apiKey)
 
 	resp := releaseUploadsResponse{uploadID, "http://" + r.Host + "/upload/file"}
-	json, _ := json.Marshal(resp)
-	w.Write(json)
+	json, err := json.Marshal(resp)
+	assert.Nil(t, err)
+
+	c, err := w.Write(json)
+	assert.GreaterOrEqual(t, c, 0)
+	assert.Nil(t, err)
 }
 
 func handleFailure404(t *testing.T, w http.ResponseWriter, r *http.Request) {
@@ -47,7 +51,11 @@ func handleFailure404(t *testing.T, w http.ResponseWriter, r *http.Request) {
 
 	b, _ := json.Marshal(se404)
 	w.WriteHeader(se404.StatusCode)
-	w.Write(b)
+
+	c, err := w.Write(b)
+
+	assert.Nil(t, err)
+	assert.GreaterOrEqual(t, c, 0)
 }
 
 func handlePath(t *testing.T, path string, hf handlerFunc) {
@@ -112,6 +120,7 @@ func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
 		assert.Nil(t, err)
 
 		_, params, err := mime.ParseMediaType(req.Header.Get("Content-type"))
+		assert.NoError(t, err)
 
 		t.Run("Part should be populated", func(t *testing.T) {
 			mr := multipart.NewReader(req.Body, params["boundary"])
@@ -191,7 +200,10 @@ func handleUploadFailure(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	b, _ := json.Marshal(se404)
 
 	w.WriteHeader(http.StatusNotFound)
-	w.Write(b)
+
+	c, err := w.Write(b)
+	assert.GreaterOrEqual(t, c, 1)
+	assert.NoError(t, err)
 }
 
 func TestShouldHandleErrorAfterUpload(t *testing.T) {

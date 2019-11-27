@@ -133,6 +133,7 @@ func (s *UploadService) Do(r UploadRequest) error {
 		return err
 	}
 
+	// Beginning the upload process
 	fmt.Println("\t", "Beginning upload")
 	uploadResponse, err := s.doUploadRequest(r)
 	if err != nil {
@@ -154,6 +155,9 @@ func (s *UploadService) Do(r UploadRequest) error {
 
 	// Upload body request
 	resp, err := s.client.client.Do(request)
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("Upload failed : %s", resp.Status)
