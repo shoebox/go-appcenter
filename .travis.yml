@@ -1,10 +1,11 @@
 language: go
+
+go_import_path: github.com/shoebox/go-appcenter
+
 go:
+  - 1.12.x
   - 1.13.x
 
-before_script:
-
-script:
-  - time make fast_check_generated
-  - time make test
+install:
+  - export PATH=$PATH:$HOME/gopath/bin
 
