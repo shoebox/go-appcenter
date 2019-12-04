@@ -1,10 +1,10 @@
 package appcenter
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"mime"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	apiKey   string = "AABBCCDDEE"
-	uploadID string = "123-456-789"
+	apiKey    string = "AABBCCDDEE"
+	uploadID  string = "123-456-789"
+	releaseID string = "AA-BB-CC-DD"
 )
 
 var request = UploadRequest{
@@ -45,8 +46,11 @@ func handleSuccessFullReleaseUpload(t *testing.T, w http.ResponseWriter, r *http
 	assert.Nil(t, err)
 }
 
-func handleFailure404(t *testing.T, w http.ResponseWriter, r *http.Request) {
-	validateMethod(t, r, http.MethodPost)
+func handleFailure404AndCheckMethod(t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request,
+	method string) {
+	validateMethod(t, r, method)
 	validateHeader(t, r, "X-API-Token", apiKey)
 
 	b, _ := json.Marshal(se404)
@@ -56,6 +60,12 @@ func handleFailure404(t *testing.T, w http.ResponseWriter, r *http.Request) {
 
 	assert.Nil(t, err)
 	assert.GreaterOrEqual(t, c, 0)
+
+}
+func handleFailure404(t *testing.T,
+	w http.ResponseWriter,
+	r *http.Request) {
+	handleFailure404AndCheckMethod(t, w, r, http.MethodPost)
 }
 
 func handlePath(t *testing.T, path string, hf handlerFunc) {
@@ -66,17 +76,32 @@ func handlePath(t *testing.T, path string, hf handlerFunc) {
 }
 
 func setupServer(t *testing.T, hf handlerFunc) {
-	handlePath(t,
+	setupServerWithPath(t, hf,
 		fmt.Sprintf("/apps/%s/%s/release_uploads",
 			request.OwnerName,
-			request.AppName),
-		hf)
+			request.AppName))
+}
+
+func writeBody(t *testing.T, w http.ResponseWriter, resp interface{}) {
+	json, err := json.Marshal(resp)
+	assert.Nil(t, err)
+
+	c, err := w.Write(json)
+	assert.GreaterOrEqual(t, c, 0)
+	assert.Nil(t, err)
+}
+
+func setupServerWithPath(t *testing.T, hf handlerFunc, path string) {
+	handlePath(t, path, hf)
+}
+
+func serverTest(t *testing.T, hf handlerFunc) {
+	openServer(apiKey)
+	setupServer(t, hf)
 }
 
 func TestUploadRequestReleaseSuccess(t *testing.T) {
-	// setup:
-	openServer(apiKey)
-	setupServer(t, handleSuccessFullReleaseUpload)
+	serverTest(t, handleSuccessFullReleaseUpload)
 	defer closeServer()
 
 	// when:
@@ -89,9 +114,7 @@ func TestUploadRequestReleaseSuccess(t *testing.T) {
 }
 
 func TestUploadRequestShouldHandleFailure(t *testing.T) {
-	// setup:
-	openServer(apiKey)
-	setupServer(t, handleFailure404)
+	serverTest(t, handleFailure404)
 	defer closeServer()
 
 	// when:
@@ -104,34 +127,42 @@ func TestUploadRequestShouldHandleFailure(t *testing.T) {
 
 func TestUploadDo(t *testing.T) {
 	// setup:
-	openServer(apiKey)
-	setupServer(t, handleSuccessFullReleaseUpload)
+	serverTest(t, handleSuccessFullReleaseUpload)
 	defer closeServer()
 
 	// when:
 	err := testClient.Upload.Do(request)
-	fmt.Println(err)
+	assert.NotNil(t, err)
 }
 
 func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
 	fakePayload := "fake-data-payload"
+
 	t.Run("Test multipart creation", func(t *testing.T) {
-		req, err := getBody("file.ipa", "ipa", strings.NewReader(fakePayload))
+		mw, r, err := getBody("file.ipa", "ipa", strings.NewReader(fakePayload))
 		assert.Nil(t, err)
 
-		_, params, err := mime.ParseMediaType(req.Header.Get("Content-type"))
-		assert.NoError(t, err)
+		reader := multipart.NewReader(r, mw.Boundary())
 
-		t.Run("Part should be populated", func(t *testing.T) {
-			mr := multipart.NewReader(req.Body, params["boundary"])
+		t.Run("We should expect part 1", func(t *testing.T) {
+			part, err := reader.NextPart()
+			if part == nil || err != nil {
+				t.Error("Expected part1")
+				return
+			}
 
-			p, err := mr.NextPart()
-			assert.Nil(t, err)
+			t.Run("And should contain the payload", func(t *testing.T) {
+				buf := new(bytes.Buffer)
+				if _, err := io.Copy(buf, part); err != nil {
+					t.Errorf("part 1 copy: %v", err)
+				}
+				assert.Equal(t, string(buf.Bytes()), fakePayload)
+			})
+		})
 
-			b, err := ioutil.ReadAll(p)
-			assert.Nil(t, err)
-
-			assert.EqualValues(t, string(b), fakePayload)
+		t.Run("And no more part further", func(t *testing.T) {
+			_, err := reader.NextPart()
+			assert.Equal(t, err, io.EOF)
 		})
 	})
 }
@@ -222,4 +253,80 @@ func TestShouldHandleErrorAfterUpload(t *testing.T) {
 			assert.Nil(t, err)
 		})
 	})
+}
+
+func TestShouldRequestCommitInProperFormat(t *testing.T) {
+	// setup:
+	openServer(apiKey)
+	setupServer(t, handleCommitRequestSuccess)
+	defer closeServer()
+
+	// when:
+	resp, err := testClient.Upload.createReleaeCommitRequest(request,
+		&releaseUploadsResponse{UploadID: "123-456-789"})
+
+	assert.Nil(t, err)
+	assert.NotNil(t, resp)
+}
+
+func handleCommitRequestSuccess(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	validateMethod(t, r, http.MethodPost)
+	validateHeader(t, r, "X-API-Token", apiKey)
+
+	writeBody(t, w, patchReleaseUploadResponse{
+		ReleaseID:  "123",
+		ReleaseURL: "http://test.com/test",
+	})
+}
+
+func TestShouldReleaseTheCommit(t *testing.T) {
+	// setup
+	openServer(apiKey)
+	defer closeServer()
+
+	path := fmt.Sprintf("/apps/%s/%s/release_uploads/%v",
+		request.OwnerName,
+		request.AppName,
+		100)
+
+	cb := func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+		validateMethod(t, r, http.MethodPatch)
+		validateHeader(t, r, "X-API-Token", apiKey)
+
+		writeBody(t, w, patchReleaseUploadResponse{
+			ReleaseID:  "123",
+			ReleaseURL: "http://test.com/test",
+		})
+	}
+
+	setupServerWithPath(t, cb, path)
+
+	t.Run("When committing the release the release_upload endpoint should be invoked",
+		func(t *testing.T) {
+			resp := releaseUploadsResponse{UploadID: "100"}
+			err := testClient.Upload.releaseCommit(request, &resp)
+			assert.Nil(t, err)
+		})
+}
+
+func TestErrorShouldBeHandleWhenTryingToReleaseTheCommit(t *testing.T) {
+	openServer(apiKey)
+	defer closeServer()
+
+	path := fmt.Sprintf("/apps/%s/%s/release_uploads/%v",
+		request.OwnerName,
+		request.AppName,
+		100)
+
+	cb := func(t *testing.T, w http.ResponseWriter, r *http.Request) {
+		handleFailure404AndCheckMethod(t, w, r, http.MethodPatch)
+	}
+
+	setupServerWithPath(t, cb, path)
+
+	resp := releaseUploadsResponse{UploadID: "100"}
+	err := testClient.Upload.releaseCommit(request, &resp)
+
+	assert.NotNil(t, err)
+	assert.EqualError(t, err, "Failed : [Not Found] 404 Not found. Context ID: e49d008f-f9c1-4b4e-82b6-e89dc8279d65")
 }
