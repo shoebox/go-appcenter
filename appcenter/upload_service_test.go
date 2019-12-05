@@ -14,9 +14,8 @@ import (
 )
 
 const (
-	apiKey    string = "AABBCCDDEE"
-	uploadID  string = "123-456-789"
-	releaseID string = "AA-BB-CC-DD"
+	apiKey   string = "AABBCCDDEE"
+	uploadID string = "123-456-789"
 )
 
 var request = UploadRequest{
