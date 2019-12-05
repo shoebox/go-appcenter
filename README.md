@@ -3,6 +3,8 @@
 
 [![codecov](https://codecov.io/gh/shoebox/go-appcenter/branch/master/graph/badge.svg)](https://codecov.io/gh/shoebox/go-appcenter)
 [![Go Report Card](https://goreportcard.com/badge/github.com/shoebox/go-appcenter)](https://goreportcard.com/report/github.com/shoebox/go-appcenter)
+[![Build
+Status](https://travis-ci.org/shoebox/go-appcenter.svg)](https://travis-ci.org/shoebox/go-appcenter)
 
 AppCenter.ms client made in GO
 
