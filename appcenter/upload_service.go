@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -207,7 +208,10 @@ func getBody(url string, fileName string, fileReader io.Reader) (*multipart.Writ
 
 		defer func() {
 			if err != nil {
-				pw.CloseWithError(err)
+				err := pw.CloseWithError(err)
+				if err != nil {
+					log.Panicln(err)
+				}
 			} else {
 				pw.Close()
 			}
