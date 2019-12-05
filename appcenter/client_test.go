@@ -12,7 +12,6 @@ import (
 
 var (
 	testClient *Client
-	path       = "/test/fake/path"
 	mux        *http.ServeMux
 	server     *httptest.Server
 )

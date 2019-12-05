@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -35,6 +37,77 @@ type ReleaseUploadPayload struct {
 type releaseUploadsResponse struct {
 	UploadID  string `json:"upload_id"`
 	UploadURL string `json:"upload_url"`
+}
+
+type releaseUploadStatus struct {
+	Status string `json:"status"`
+}
+
+type patchReleaseUploadResponse struct {
+	ReleaseID  string `json:"release_id"`
+	ReleaseURL string `json:"release_url"`
+}
+
+// Do start the upload request witht the provided parameters
+func (s *UploadService) Do(r UploadRequest) error {
+	err := validateRequest(r)
+	if err != nil {
+		return err
+	}
+
+	// Request Upload "slot"
+	fmt.Println("\t", "Beginning upload")
+	uploadResponse, err := s.doUploadRequest(r)
+	if err != nil {
+		return err
+	}
+
+	// Opening file
+	reader, err := os.Open(r.FilePath)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+
+	// Do the file upload
+	err = s.doFileUpload(r, uploadResponse.UploadURL, reader)
+	if err != nil {
+		return err
+	}
+
+	// Commit the release
+	return s.releaseCommit(r, uploadResponse)
+}
+
+func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader io.Reader) error {
+	fmt.Println("\t", "Starting upload")
+
+	// Create multipart request  body
+	multipart, pr, err := getBody(uploadURL, r.FilePath, reader)
+	if err != nil {
+		return err
+	}
+
+	// Create the request
+	req, err := http.NewRequest("POST", uploadURL, pr)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", multipart.FormDataContentType())
+
+	// Upload body request
+	resp, err := s.client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("Upload failed : %s", resp.Status)
+	}
+
+	fmt.Println("\t", "Upload completed")
+	return nil
 }
 
 func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploadsResponse) (*Response, error) {
@@ -126,108 +199,97 @@ func validateRequestBuildVersion(r UploadRequest) error {
 	return nil
 }
 
-// Do start the upload request witht the provided parameters
-func (s *UploadService) Do(r UploadRequest) error {
-	err := validateRequest(r)
-	if err != nil {
-		return err
-	}
+func getBody(url string, fileName string, fileReader io.Reader) (*multipart.Writer, io.Reader, error) {
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
 
-	fmt.Println("\t", "Beginning upload")
-	uploadResponse, err := s.doUploadRequest(r)
-	if err != nil {
-		return err
-	}
-
-	// Opening file
-	file, err := os.Open(r.FilePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Uploading file
-	request, err := getBody(uploadResponse.UploadURL, r.FilePath, file)
-	if err != nil {
-		return err
-	}
-
-	// Upload body request
-	resp, err := s.client.client.Do(request)
-
-	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("Upload failed : %s", resp.Status)
-	}
-
-	fmt.Println("\tUpload completed")
-
-	return nil
-}
-
-func getBody(url string, fileName string, fileReader io.Reader) (*http.Request, error) {
-	r, w := io.Pipe()
-	m := multipart.NewWriter(w)
 	go func() {
-		defer w.Close()
-		defer m.Close()
-		part, err := m.CreateFormFile("ipa", fileName)
+		var err error
+
+		defer func() {
+			if err != nil {
+				err := pw.CloseWithError(err)
+				if err != nil {
+					log.Panicln(err)
+				}
+			} else {
+				pw.Close()
+			}
+		}()
+
+		partWriter, err := writer.CreateFormFile("ipa", fileName)
 		if err != nil {
 			return
 		}
 
-		if _, err = io.Copy(part, fileReader); err != nil {
+		_, err = io.Copy(partWriter, fileReader)
+		if err != nil {
 			return
 		}
+
+		err = writer.Close()
 	}()
 
-	req, err := http.NewRequest("POST", url, r)
-	req.Header.Set("Content-Type", m.FormDataContentType())
+	return writer, pr, nil
+}
+
+func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse) error {
+	// Create request
+	req, err := s.createReleaeCommitRequest(r, u)
+	if err != nil {
+		return err
+	}
+
+	// Emit the request
+	resp, err := s.client.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	// handle request response
+	if resp.StatusCode != http.StatusOK {
+		error := checkError(resp)
+		return fmt.Errorf("Failed : [%v] %v %v", error.Code, error.StatusCode, error.Message)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("Invalid json format for body response %v", string(body))
+	}
+
+	response := &patchReleaseUploadResponse{}
+	err = json.Unmarshal(body, response)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("\t", "Release commited", response.ReleaseID, response.ReleaseURL)
+
+	return err
+}
+
+func (s *UploadService) createReleaeCommitRequest(r UploadRequest, u *releaseUploadsResponse) (*http.Request, error) {
+	// The json payload
+	b, err := json.Marshal(releaseUploadStatus{Status: "committed"})
+	if err != nil {
+		return nil, err
+	}
+
+	// Releasing the upload
+	req, err := http.NewRequest("PATCH",
+		fmt.Sprintf("%s/apps/%s/%s/release_uploads/%s",
+			s.client.BaseURL,
+			r.OwnerName,
+			r.AppName,
+			u.UploadID),
+		bytes.NewBuffer(b))
+
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("X-API-Token", s.client.APIKey)
+	req.Header.Add("Content-Type", "application/json")
 
 	return req, err
-}
-
-func (s *UploadService) uploadFile(handle io.Reader, uploadURL string, filePath string) error {
-	fmt.Println(("Uploading file...."))
-	_, err := s.uploadFileRequest(uploadURL,
-		map[string]string{},
-		"ipa",
-		filePath,
-		handle)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *UploadService) uploadFileRequest(
-	uri string,
-	params map[string]string,
-	paramName string,
-	path string,
-	handler io.Reader) (*http.Response, error) {
-
-	r, w := io.Pipe()
-	m := multipart.NewWriter(w)
-
-	errs := make(chan error, 1)
-
-	go func() {
-		defer w.Close()
-		defer m.Close()
-		defer close(errs)
-		part, err := m.CreateFormFile(paramName, path)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		if _, err = io.Copy(part, handler); err != nil {
-			errs <- err
-			return
-		}
-	}()
-
-	return http.Post(uri, m.FormDataContentType(), r)
 }

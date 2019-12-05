@@ -1,0 +1,11 @@
+language: go
+
+go_import_path: github.com/shoebox/go-appcenter
+
+go:
+  - 1.13.x
+
+install:
+  - export PATH=$PATH:$HOME/gopath/bin
+  - go get -v -t ./...
+
