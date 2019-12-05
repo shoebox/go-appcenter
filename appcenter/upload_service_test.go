@@ -155,7 +155,7 @@ func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
 				if _, err := io.Copy(buf, part); err != nil {
 					t.Errorf("part 1 copy: %v", err)
 				}
-				assert.Equal(t, string(buf.Bytes()), fakePayload)
+				assert.Equal(t, buf.String(), fakePayload)
 			})
 		})
 
