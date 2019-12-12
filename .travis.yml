@@ -5,7 +5,16 @@ go_import_path: github.com/shoebox/go-appcenter
 go:
   - 1.13.x
 
+before_install:
+  - go get -t -v ./...
+
 install:
   - export PATH=$PATH:$HOME/gopath/bin
   - go get -v -t ./...
+
+script:
+  - go test goappcenter/appcenter -coverprofile=coverage.txt -covermode=atomic
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
 
