@@ -1,2 +1,6 @@
 demo/
 tags.vim
+
+coverage.txt
+go.sum
+
