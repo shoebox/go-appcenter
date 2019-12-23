@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"goappcenter/appcenter"
 	"os"
 
@@ -53,7 +52,8 @@ func main() {
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
 					Aliases:  []string{"f"},
-					Required: true},
+					Required: true,
+				},
 			},
 			Action: executeUpload,
 		},
@@ -61,7 +61,7 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		fmt.Println("\terrr : ", err)
+		panic(err)
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -56,7 +55,7 @@ func (s *UploadService) Do(r UploadRequest) error {
 	}
 
 	// Request Upload "slot"
-	fmt.Println("\t", "Beginning upload")
+	fmt.Println("\tBeginning upload")
 	uploadResponse, err := s.doUploadRequest(r)
 	if err != nil {
 		return err
@@ -80,8 +79,6 @@ func (s *UploadService) Do(r UploadRequest) error {
 }
 
 func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader io.Reader) error {
-	fmt.Println("\t", "Starting upload")
-
 	// Create multipart request  body
 	multipart, pr, err := getBody(uploadURL, r.FilePath, reader)
 	if err != nil {
@@ -94,7 +91,7 @@ func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader i
 		return err
 	}
 
-	req.Header.Set("Content-Type", multipart.FormDataContentType())
+	req.Header.Add("Content-Type", multipart.FormDataContentType())
 
 	// Upload body request
 	resp, err := s.client.client.Do(req)
@@ -103,10 +100,14 @@ func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader i
 	}
 
 	if resp.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("Upload failed : %s", resp.Status)
+		b, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("Upload failed : %s", err, string(b))
+		}
+		return fmt.Errorf("Upload failed : %s", string(b))
 	}
 
-	fmt.Println("\t", "Upload completed")
+	fmt.Println("\tUpload completed")
 	return nil
 }
 
@@ -135,7 +136,7 @@ func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploa
 }
 
 func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsResponse, error) {
-	fmt.Println("\t", "Requesting upload")
+	fmt.Println("\tRequesting upload")
 	var result releaseUploadsResponse
 	resp, err := s.releaseUploadsRequest(r, &result)
 	if err != nil {
@@ -151,7 +152,9 @@ func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsRespons
 			resp.StatusError.Code)
 	}
 
-	fmt.Println("\t", "Upload requested :", result.UploadID)
+	fmt.Println("\tUpload requested :",
+		"\n\tUpload ID:", result.UploadID,
+		"\n\tUpload URL:", result.UploadURL)
 
 	return &result, nil
 }
@@ -200,37 +203,21 @@ func validateRequestBuildVersion(r UploadRequest) error {
 }
 
 func getBody(url string, fileName string, fileReader io.Reader) (*multipart.Writer, io.Reader, error) {
-	pr, pw := io.Pipe()
-	writer := multipart.NewWriter(pw)
+	var b bytes.Buffer
+	w := multipart.NewWriter(&b)
 
-	go func() {
-		var err error
+	fw, err := w.CreateFormFile("ipa", fileName)
+	if err != nil {
+		return nil, nil, err
+	}
 
-		defer func() {
-			if err != nil {
-				err := pw.CloseWithError(err)
-				if err != nil {
-					log.Panicln(err)
-				}
-			} else {
-				pw.Close()
-			}
-		}()
+	if _, err = io.Copy(fw, fileReader); err != nil {
+		return nil, nil, err
+	}
 
-		partWriter, err := writer.CreateFormFile("ipa", fileName)
-		if err != nil {
-			return
-		}
+	w.Close()
 
-		_, err = io.Copy(partWriter, fileReader)
-		if err != nil {
-			return
-		}
-
-		err = writer.Close()
-	}()
-
-	return writer, pr, nil
+	return w, &b, err
 }
 
 func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse) error {
@@ -263,7 +250,7 @@ func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse
 		return err
 	}
 
-	fmt.Println("\t", "Release commited", response.ReleaseID, response.ReleaseURL)
+	fmt.Println("\tRelease commited", response.ReleaseID, response.ReleaseURL)
 
 	return err
 }
