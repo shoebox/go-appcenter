@@ -24,6 +24,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Destination: &APIKey,
+			EnvVars:     []string{"AppCenterAPIKey"},
 			Name:        "apiKey",
 			Required:    true,
 			Usage:       "AppCenter.ms API key",
@@ -36,11 +37,13 @@ func main() {
 			Name: "upload",
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
+					EnvVars:     []string{"AppCenterFileName"},
 					Aliases:     []string{"f"},
 					Destination: &request.FilePath,
 					Required:    true,
 				},
 				&cli.StringFlag{
+					EnvVars:     []string{"AppCenterAppName"},
 					Destination: &request.AppName,
 					Name:        "appName",
 					Required:    true,
@@ -48,6 +51,7 @@ func main() {
 				},
 				&cli.StringFlag{
 					Destination: &request.OwnerName,
+					EnvVars:     []string{"AppCenterOwnerName"},
 					Name:        "ownerName",
 					Required:    true,
 					Usage:       "AppCenter owner name",
@@ -72,6 +76,7 @@ func main() {
 				},
 				&cli.StringFlag{
 					Destination: &request.Distribute.GroupName,
+					EnvVars:     []string{"groupName"},
 					Name:        "groupName",
 					Required:    false,
 					Usage:       "Group name to distribute to the release",
