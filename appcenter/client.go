@@ -26,6 +26,8 @@ type Client struct {
 	APIKey string
 
 	Upload *UploadService
+
+	Distribute *DistributeService
 }
 
 // NewClient create a new instance of the client for the provided APIKey
@@ -38,6 +40,7 @@ func NewClient(APIKey string) *Client {
 	c := &Client{APIKey: APIKey}
 	c.BaseURL = baseURL
 	c.client = httpClient
+	c.Distribute = &DistributeService{client: c}
 	c.Upload = &UploadService{client: c}
 	return c
 }
@@ -76,6 +79,16 @@ func checkError(r *http.Response) *StatusError {
 	}
 
 	return errorResponse
+}
+
+func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
+	req.Header.Add("X-API-Token", c.APIKey)
+	return req
+}
+
+func RequestContentTypeJson(req *http.Request) *http.Request {
+	req.Header.Add("Content-Type", "application/json")
+	return req
 }
 
 func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {

@@ -22,10 +22,15 @@ type UploadService struct {
 // UploadRequest wrap the required arguments for the upload specifications
 type UploadRequest struct {
 	//APIToken  string
-	AppName   string
-	OwnerName string
-	FilePath  string
-	Option    ReleaseUploadPayload
+	AppName    string
+	OwnerName  string
+	FilePath   string
+	Distribute DistributionPayload
+	Option     ReleaseUploadPayload
+}
+
+type DistributionPayload struct {
+	GroupName string
 }
 
 // ReleaseUploadPayload wrap optional informations about the release
@@ -50,30 +55,30 @@ type patchReleaseUploadResponse struct {
 }
 
 // Do start the upload request witht the provided parameters
-func (s *UploadService) Do(r UploadRequest) error {
+func (s *UploadService) Do(r UploadRequest) (*string, error) {
 	err := validateRequest(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Request Upload "slot"
-	fmt.Println("\tBeginning upload")
+	fmt.Println("\tBeginning upload", s.client.APIKey)
 	uploadResponse, err := s.doUploadRequest(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Opening file
 	reader, err := os.Open(r.FilePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer reader.Close()
 
 	// Do the file upload
 	err = s.doFileUpload(r, uploadResponse.UploadURL, reader)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Commit the release
@@ -127,12 +132,12 @@ func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploa
 			r.AppName),
 		bytes.NewBuffer(b))
 
-	if err != nil {
-		return nil, err
-	}
-
 	req.Header.Add("X-API-Token", s.client.APIKey)
 	req.Header.Add("Content-Type", "application/json")
+
+	if err != nil {
+		return nil, fmt.Errorf("Failed to request uplaod (Error: %v)", err)
+	}
 
 	return s.client.do(req, &res)
 }
@@ -221,42 +226,45 @@ func getBody(url string, fileName string, fileReader io.Reader) (*multipart.Writ
 	return w, &b, err
 }
 
-func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse) error {
+func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse) (*string, error) {
+	color.Green("\n\tCommitting release")
 	// Create request
 	req, err := s.createReleaeCommitRequest(r, u)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Emit the request
 	resp, err := s.client.client.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// handle request response
 	if resp.StatusCode != http.StatusOK {
 		error := checkError(resp)
-		return fmt.Errorf("Failed : [%v] %v %v", error.Code, error.StatusCode, error.Message)
+		return nil, fmt.Errorf("Failed : [%v] %v %v",
+			error.Code,
+			error.StatusCode,
+			error.Message)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("Invalid json format for body response %v", string(body))
+		return nil, fmt.Errorf("Invalid json format for body response %v", string(body))
 	}
 
 	response := &patchReleaseUploadResponse{}
 	err = json.Unmarshal(body, response)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	color.Green("\tRelease Committed")
 	fmt.Println("\t\t Release ID  : ", response.ReleaseID)
 	fmt.Println("\t\t Release URL : ", response.ReleaseURL)
-	// fmt.Println("\tRelease commited", response.ReleaseID, response.ReleaseURL)
+	color.Green("\tRelease Committed")
 
-	return err
+	return &response.ReleaseID, nil
 }
 
 func (s *UploadService) createReleaeCommitRequest(r UploadRequest, u *releaseUploadsResponse) (*http.Request, error) {
