@@ -104,7 +104,7 @@ func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader i
 	if resp.StatusCode != http.StatusNoContent {
 		b, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			return fmt.Errorf("Upload failed : %s", err, string(b))
+			return fmt.Errorf("Upload failed : %s %s", err, string(b))
 		}
 		return fmt.Errorf("Upload failed : %s", string(b))
 	}
