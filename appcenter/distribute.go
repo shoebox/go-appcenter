@@ -15,10 +15,9 @@ type DistributeService struct {
 }
 
 type distributionGroupResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Origin      string `json:"origin"`
-	displayName string `json:"display_name"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Origin string `json:"origin"`
 }
 
 type distributionBody struct {
@@ -124,5 +123,4 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 			groupID,
 			resp)
 	}
-	return nil
 }
