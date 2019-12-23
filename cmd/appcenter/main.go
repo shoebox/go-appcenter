@@ -11,7 +11,8 @@ import (
 var APIKey string
 
 var request = appcenter.UploadRequest{
-	Option: appcenter.ReleaseUploadPayload{},
+	Distribute: appcenter.DistributionPayload{},
+	Option:     appcenter.ReleaseUploadPayload{},
 }
 
 func main() {
@@ -69,6 +70,12 @@ func main() {
 					Required:    false,
 					Usage:       "Release version Id",
 				},
+				&cli.StringFlag{
+					Destination: &request.Distribute.GroupName,
+					Name:        "groupName",
+					Required:    false,
+					Usage:       "Group name to distribute to the release",
+				},
 			},
 			Action: executeUpload,
 		},
@@ -81,5 +88,16 @@ func main() {
 }
 
 func executeUpload(c *cli.Context) error {
-	return appcenter.NewClient(APIKey).Upload.Do(request)
+	client := appcenter.NewClient(APIKey)
+
+	releaseID, err := client.Upload.Do(request)
+	if err != nil {
+		return err
+	}
+
+	if request.Distribute.GroupName != "" {
+		return client.Distribute.Do(*releaseID, request)
+	}
+
+	return nil
 }
