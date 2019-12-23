@@ -1,6 +1,7 @@
 package appcenter
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -75,10 +76,28 @@ func checkError(r *http.Response) *StatusError {
 	if err != nil {
 		fmt.Println("> failed to parse response body as JSON")
 		// failed to unmarhsal API Error, use body as Message
-		errorResponse.Message = string(body)
+		errorResponse.Message = fmt.Sprintf("Invalid JSON body `%v`", string(body))
 	}
 
 	return errorResponse
+}
+
+func newRequestWithPayload(method string,
+	url string,
+	body interface{}) (*http.Request, error) {
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("Error marshalling body (Error : %v)", err)
+	}
+
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(payload))
+
+	if err != nil {
+		return nil, fmt.Errorf("Error creating request (Error : %v)", err)
+	}
+
+	return req, err
 }
 
 func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
@@ -86,7 +105,7 @@ func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
 	return req
 }
 
-func RequestContentTypeJson(req *http.Request) *http.Request {
+func requestContentTypeJSON(req *http.Request) *http.Request {
 	req.Header.Add("Content-Type", "application/json")
 	return req
 }

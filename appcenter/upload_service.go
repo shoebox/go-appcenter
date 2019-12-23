@@ -118,25 +118,21 @@ func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader i
 	return nil
 }
 
-func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploadsResponse) (*Response, error) {
+func (s *UploadService) releaseUploadsRequest(r UploadRequest,
+	res *releaseUploadsResponse) (*Response, error) {
 
-	b, err := json.Marshal(r.Option)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST",
+	req, err := newRequestWithPayload("POST",
 		fmt.Sprintf("%s/apps/%s/%s/release_uploads",
 			s.client.BaseURL,
 			r.OwnerName,
 			r.AppName),
-		bytes.NewBuffer(b))
+		r.Option)
 
 	req.Header.Add("X-API-Token", s.client.APIKey)
 	req.Header.Add("Content-Type", "application/json")
 
 	if err != nil {
-		return nil, fmt.Errorf("Failed to request uplaod (Error: %v)", err)
+		return nil, err
 	}
 
 	return s.client.do(req, &res)

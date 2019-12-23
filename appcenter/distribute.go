@@ -1,8 +1,6 @@
 package appcenter
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -83,30 +81,23 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 	releaseID string,
 	groupID string) error {
 
-	body := distributionBody{
-		ID:              groupID,
-		MandatoryUpdate: false,
-		NotifyTester:    false,
-	}
-
-	payload, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST",
+	req, err := newRequestWithPayload("POST",
 		fmt.Sprintf("%s/apps/%s/%s/releases/%s/groups",
 			s.client.BaseURL,
 			ownerName,
 			appName,
 			releaseID),
-		bytes.NewBuffer(payload))
+		distributionBody{
+			ID:              groupID,
+			MandatoryUpdate: false,
+			NotifyTester:    false,
+		})
 
-	req = RequestContentTypeJson(req)
-	req = s.client.ApplyTokenToRequest(req)
 	if err != nil {
 		return err
 	}
+
+	req = s.client.ApplyTokenToRequest(requestContentTypeJSON(req))
 
 	resp, err := s.client.client.Do(req)
 	if err != nil {
@@ -116,11 +107,11 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 	if resp.StatusCode == 201 {
 		color.Green("\tDistribution completed")
 		return nil
-	} else {
-		// TODO: Wrap better the error here
-		return fmt.Errorf("Failed to share release %v to group %v (Error : %v)",
-			releaseID,
-			groupID,
-			resp)
 	}
+
+	// TODO: Wrap better the error here
+	return fmt.Errorf("Failed to share release %v to group %v (Error : %v)",
+		releaseID,
+		groupID,
+		resp)
 }
