@@ -36,11 +36,13 @@ func main() {
 			Name: "upload",
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
+					EnvVars:     []string{"fileName"},
 					Aliases:     []string{"f"},
 					Destination: &request.FilePath,
 					Required:    true,
 				},
 				&cli.StringFlag{
+					EnvVars:     []string{"appName"},
 					Destination: &request.AppName,
 					Name:        "appName",
 					Required:    true,
@@ -48,6 +50,7 @@ func main() {
 				},
 				&cli.StringFlag{
 					Destination: &request.OwnerName,
+					EnvVars:     []string{"ownerName"},
 					Name:        "ownerName",
 					Required:    true,
 					Usage:       "AppCenter owner name",
@@ -72,6 +75,7 @@ func main() {
 				},
 				&cli.StringFlag{
 					Destination: &request.Distribute.GroupName,
+					EnvVars:     []string{"groupName"},
 					Name:        "groupName",
 					Required:    false,
 					Usage:       "Group name to distribute to the release",
