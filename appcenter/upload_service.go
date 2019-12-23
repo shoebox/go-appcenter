@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/fatih/color"
 )
 
 // UploadService definition
@@ -136,7 +138,6 @@ func (s *UploadService) releaseUploadsRequest(r UploadRequest, res *releaseUploa
 }
 
 func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsResponse, error) {
-	fmt.Println("\tRequesting upload")
 	var result releaseUploadsResponse
 	resp, err := s.releaseUploadsRequest(r, &result)
 	if err != nil {
@@ -152,9 +153,9 @@ func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsRespons
 			resp.StatusError.Code)
 	}
 
-	fmt.Println("\tUpload requested :",
-		"\n\tUpload ID:", result.UploadID,
-		"\n\tUpload URL:", result.UploadURL)
+	fmt.Println(color.CyanString("\tUpload Requested"))
+	fmt.Println("\t\tUpload ID \t:", result.UploadID)
+	fmt.Println("\t\tUpload URL\t:", result.UploadURL)
 
 	return &result, nil
 }
@@ -250,7 +251,10 @@ func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse
 		return err
 	}
 
-	fmt.Println("\tRelease commited", response.ReleaseID, response.ReleaseURL)
+	color.Green("\tRelease Committed")
+	fmt.Println("\t\t Release ID  : ", response.ReleaseID)
+	fmt.Println("\t\t Release URL : ", response.ReleaseURL)
+	// fmt.Println("\tRelease commited", response.ReleaseID, response.ReleaseURL)
 
 	return err
 }
