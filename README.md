@@ -18,7 +18,7 @@ AppCenter.ms client made in GO
 ## Via Docker
 
 Image is hosted on DockerHub:
-> https://hub.docker.com/repository/docker/sho3box/go-appcenter
+> https://hub.docker.com/r/sho3box/go-appcenter
 
 To run it:
 
