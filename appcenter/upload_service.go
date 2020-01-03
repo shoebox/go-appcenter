@@ -225,7 +225,7 @@ func getBody(url string, fileName string, fileReader io.Reader) (*multipart.Writ
 func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse) (*string, error) {
 	color.Green("\n\tCommitting release")
 	// Create request
-	req, err := s.createReleaeCommitRequest(r, u)
+	req, err := s.createReleaseCommitRequest(r, u)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func (s *UploadService) releaseCommit(r UploadRequest, u *releaseUploadsResponse
 	return &response.ReleaseID, nil
 }
 
-func (s *UploadService) createReleaeCommitRequest(r UploadRequest, u *releaseUploadsResponse) (*http.Request, error) {
+func (s *UploadService) createReleaseCommitRequest(r UploadRequest, u *releaseUploadsResponse) (*http.Request, error) {
 	// The json payload
 	b, err := json.Marshal(releaseUploadStatus{Status: "committed"})
 	if err != nil {

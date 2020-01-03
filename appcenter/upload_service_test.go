@@ -3,6 +3,7 @@ package appcenter
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -99,29 +100,41 @@ func serverTest(t *testing.T, hf handlerFunc) {
 	setupServer(t, hf)
 }
 
-func TestUploadRequestReleaseSuccess(t *testing.T) {
-	serverTest(t, handleSuccessFullReleaseUpload)
-	defer closeServer()
+func TestUploadsRequest(t *testing.T) {
+	t.Run("Should handle success", func(t *testing.T) {
+		serverTest(t, handleSuccessFullReleaseUpload)
+		defer closeServer()
 
-	// when:
-	var response releaseUploadsResponse
-	resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
+		// when:
+		var response releaseUploadsResponse
+		resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
 
-	// then:
-	assert.Nil(t, resp.StatusError)
-	assert.Nil(t, err)
-}
+		// then:
+		assert.Nil(t, resp.StatusError)
+		assert.Nil(t, err)
+	})
 
-func TestUploadRequestShouldHandleFailure(t *testing.T) {
-	serverTest(t, handleFailure404)
-	defer closeServer()
+	t.Run("Should handle failure", func(t *testing.T) {
+		serverTest(t, handleFailure404)
+		defer closeServer()
 
-	// when:
-	var response releaseUploadsResponse
-	resp, _ := testClient.Upload.releaseUploadsRequest(request, &response)
+		// when:
+		var response releaseUploadsResponse
+		resp, _ := testClient.Upload.releaseUploadsRequest(request, &response)
 
-	// then:
-	assert.EqualValues(t, resp.StatusError, &se404)
+		// then:
+		assert.EqualValues(t, resp.StatusError, &se404)
+	})
+
+	t.Run("Should handle request create error", func(t *testing.T) {
+		var response releaseUploadsResponse
+		testClient.BaseURL = nil
+		resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
+
+		assert.Nil(t, resp)
+		assert.EqualError(t, err, "Post %3Cnil%3E/apps/owner/app-name/"+
+			"release_uploads: unsupported protocol scheme \"\"")
+	})
 }
 
 func TestUploadDo(t *testing.T) {
@@ -136,35 +149,6 @@ func TestUploadDo(t *testing.T) {
 }
 
 func TestUploadShouldFailInCaseOfErrorDuringUploadRequest(t *testing.T) {
-	fakePayload := "fake-data-payload"
-
-	t.Run("Test multipart creation", func(t *testing.T) {
-		mw, r, err := getBody("file.ipa", "ipa", strings.NewReader(fakePayload))
-		assert.Nil(t, err)
-
-		reader := multipart.NewReader(r, mw.Boundary())
-
-		t.Run("We should expect part 1", func(t *testing.T) {
-			part, err := reader.NextPart()
-			if part == nil || err != nil {
-				t.Error("Expected part1")
-				return
-			}
-
-			t.Run("And should contain the payload", func(t *testing.T) {
-				buf := new(bytes.Buffer)
-				if _, err := io.Copy(buf, part); err != nil {
-					t.Errorf("part 1 copy: %v", err)
-				}
-				assert.Equal(t, buf.String(), fakePayload)
-			})
-		})
-
-		t.Run("And no more part further", func(t *testing.T) {
-			_, err := reader.NextPart()
-			assert.Equal(t, err, io.EOF)
-		})
-	})
 }
 
 func TestValdationBuildVersionArgument(t *testing.T) {
@@ -262,7 +246,7 @@ func TestShouldRequestCommitInProperFormat(t *testing.T) {
 	defer closeServer()
 
 	// when:
-	resp, err := testClient.Upload.createReleaeCommitRequest(request,
+	resp, err := testClient.Upload.createReleaseCommitRequest(request,
 		&releaseUploadsResponse{UploadID: "123-456-789"})
 
 	assert.Nil(t, err)
@@ -331,4 +315,97 @@ func TestErrorShouldBeHandleWhenTryingToReleaseTheCommit(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Nil(t, commitID)
 	assert.EqualError(t, err, "Failed : [Not Found] 404 Not found. Context ID: e49d008f-f9c1-4b4e-82b6-e89dc8279d65")
+}
+
+type zeroErrReader struct {
+	err error
+}
+
+func (r zeroErrReader) Read(p []byte) (int, error) {
+	return copy(p, []byte{0}), r.err
+}
+
+func TestGetBody(t *testing.T) {
+
+	t.Run("In case of invalid io.reader flow", func(t *testing.T) {
+		errorMessage := "Reading error"
+		reader := zeroErrReader{err: errors.New(errorMessage)}
+
+		w, r, err := getBody("toto", "file", reader)
+		assert.Nil(t, w)
+		assert.Nil(t, r)
+		assert.EqualError(t, err, errorMessage)
+	})
+
+	fakePayload := "fake-data-payload"
+
+	t.Run("Test multipart creation", func(t *testing.T) {
+		mw, r, err := getBody("file.ipa", "ipa", strings.NewReader(fakePayload))
+		assert.Nil(t, err)
+
+		reader := multipart.NewReader(r, mw.Boundary())
+
+		t.Run("We should expect part 1", func(t *testing.T) {
+			part, err := reader.NextPart()
+			if part == nil || err != nil {
+				t.Error("Expected part1")
+				return
+			}
+
+			t.Run("And should contain the payload", func(t *testing.T) {
+				buf := new(bytes.Buffer)
+				if _, err := io.Copy(buf, part); err != nil {
+					t.Errorf("part 1 copy: %v", err)
+				}
+				assert.Equal(t, buf.String(), fakePayload)
+			})
+		})
+
+		t.Run("And no more part further", func(t *testing.T) {
+			_, err := reader.NextPart()
+			assert.Equal(t, err, io.EOF)
+		})
+	})
+}
+
+//
+func handleUploadRequestSuccess(t *testing.T, w http.ResponseWriter, r *http.Request) {
+	validateMethod(t, r, http.MethodPost)
+	validateHeader(t, r, "X-API-Token", apiKey)
+}
+
+func TestDoUploadRequest(t *testing.T) {
+	t.Run("Should handle success", func(t *testing.T) {
+		serverTest(t, handleUploadRequestSuccess)
+		defer closeServer()
+
+		// when:
+		resp, err := testClient.Upload.doUploadRequest(request)
+		assert.NoError(t, err)
+		assert.NotNil(t, resp)
+	})
+
+	t.Run("Should handle netowking errors", func(t *testing.T) {
+		serverTest(t, handleUploadRequestSuccess)
+		defer closeServer()
+
+		request := UploadRequest{
+			AppName:   "FakeAppName",
+			OwnerName: request.OwnerName,
+			FilePath:  "test/file.apk",
+		}
+
+		resp, err := testClient.Upload.doUploadRequest(request)
+		assert.EqualError(t, err, "HTTP request failed: 404 Not Found")
+		assert.Nil(t, resp)
+	})
+
+	t.Run("Should handle status error", func(t *testing.T) {
+		serverTest(t, handleFailure404)
+		defer closeServer()
+
+		resp, err := testClient.Upload.doUploadRequest(request)
+		assert.EqualError(t, err, "toto")
+		assert.Nil(t, resp)
+	})
 }
