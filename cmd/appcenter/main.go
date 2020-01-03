@@ -1,12 +1,19 @@
 package main
 
 import (
-	"fmt"
 	"goappcenter/appcenter"
 	"os"
 
 	"github.com/urfave/cli/v2"
 )
+
+// AppCenter API Key
+var APIKey string
+
+var request = appcenter.UploadRequest{
+	Distribute: appcenter.DistributionPayload{},
+	Option:     appcenter.ReleaseUploadPayload{},
+}
 
 func main() {
 
@@ -14,36 +21,14 @@ func main() {
 		Name:    "go-appcenter",
 		Version: "0.1.0",
 	}
+
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
-			Name:     "apiKey",
-			Required: true,
-			Usage:    "AppCenter.ms API key",
-		},
-		&cli.StringFlag{
-			Name:     "appName",
-			Required: true,
-			Usage:    "AppCenter app name",
-		},
-		&cli.StringFlag{
-			Name:     "ownerName",
-			Required: true,
-			Usage:    "AppCenter owner name",
-		},
-		&cli.StringFlag{
-			Name:     "buildNumber",
-			Required: false,
-			Usage:    "Release build number",
-		},
-		&cli.StringFlag{
-			Name:     "buildVersion",
-			Required: false,
-			Usage:    "Release build version",
-		},
-		&cli.IntFlag{
-			Name:     "releaseId",
-			Required: false,
-			Usage:    "Release version Id",
+			Destination: &APIKey,
+			EnvVars:     []string{"AppCenterAPIKey"},
+			Name:        "apiKey",
+			Required:    true,
+			Usage:       "AppCenter.ms API key",
 		},
 	}
 	app.Name = "Golang AppCenter.ms"
@@ -53,8 +38,50 @@ func main() {
 			Name: "upload",
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
-					Aliases:  []string{"f"},
-					Required: true},
+					EnvVars:     []string{"AppCenterFileName"},
+					Aliases:     []string{"f"},
+					Destination: &request.FilePath,
+					Required:    true,
+				},
+				&cli.StringFlag{
+					EnvVars:     []string{"AppCenterAppName"},
+					Destination: &request.AppName,
+					Name:        "appName",
+					Required:    true,
+					Usage:       "AppCenter app name",
+				},
+				&cli.StringFlag{
+					Destination: &request.OwnerName,
+					EnvVars:     []string{"AppCenterOwnerName"},
+					Name:        "ownerName",
+					Required:    true,
+					Usage:       "AppCenter owner name",
+				},
+				&cli.StringFlag{
+					Destination: &request.Option.BuildNumber,
+					Name:        "buildNumber",
+					Required:    false,
+					Usage:       "Release build number",
+				},
+				&cli.StringFlag{
+					Destination: &request.Option.BuildVersion,
+					Name:        "buildVersion",
+					Required:    false,
+					Usage:       "Release build version",
+				},
+				&cli.IntFlag{
+					Destination: &request.Option.ReleaseID,
+					Name:        "releaseId",
+					Required:    false,
+					Usage:       "Release version Id",
+				},
+				&cli.StringFlag{
+					Destination: &request.Distribute.GroupName,
+					EnvVars:     []string{"groupName"},
+					Name:        "groupName",
+					Required:    false,
+					Usage:       "Group name to distribute to the release",
+				},
 			},
 			Action: executeUpload,
 		},
@@ -62,22 +89,21 @@ func main() {
 
 	err := app.Run(os.Args)
 	if err != nil {
-		fmt.Println("\terrr : ", err)
+		panic(err)
 	}
 }
 
 func executeUpload(c *cli.Context) error {
-	o := appcenter.ReleaseUploadPayload{
-		BuildNumber:  c.String("buildNumber"),
-		BuildVersion: c.String("buildVersion"),
-		ReleaseID:    c.Int("releaseId"),
+	client := appcenter.NewClient(APIKey)
+
+	releaseID, err := client.Upload.Do(request)
+	if err != nil {
+		return err
 	}
 
-	r := appcenter.UploadRequest{
-		OwnerName: c.String("ownerName"),
-		AppName:   c.String("appName"),
-		FilePath:  c.Path("file"),
-		Option:    o,
+	if request.Distribute.GroupName != "" {
+		return client.Distribute.Do(*releaseID, request)
 	}
-	return appcenter.NewClient(c.String("apiKey")).Upload.Do(r)
+
+	return nil
 }

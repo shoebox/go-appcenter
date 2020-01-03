@@ -130,7 +130,8 @@ func TestUploadDo(t *testing.T) {
 	defer closeServer()
 
 	// when:
-	err := testClient.Upload.Do(request)
+	uploadID, err := testClient.Upload.Do(request)
+	assert.Nil(t, uploadID)
 	assert.NotNil(t, err)
 }
 
@@ -303,8 +304,9 @@ func TestShouldReleaseTheCommit(t *testing.T) {
 	t.Run("When committing the release the release_upload endpoint should be invoked",
 		func(t *testing.T) {
 			resp := releaseUploadsResponse{UploadID: "100"}
-			err := testClient.Upload.releaseCommit(request, &resp)
+			commitID, err := testClient.Upload.releaseCommit(request, &resp)
 			assert.Nil(t, err)
+			assert.NotNil(t, commitID)
 		})
 }
 
@@ -324,8 +326,9 @@ func TestErrorShouldBeHandleWhenTryingToReleaseTheCommit(t *testing.T) {
 	setupServerWithPath(t, cb, path)
 
 	resp := releaseUploadsResponse{UploadID: "100"}
-	err := testClient.Upload.releaseCommit(request, &resp)
+	commitID, err := testClient.Upload.releaseCommit(request, &resp)
 
 	assert.NotNil(t, err)
+	assert.Nil(t, commitID)
 	assert.EqualError(t, err, "Failed : [Not Found] 404 Not found. Context ID: e49d008f-f9c1-4b4e-82b6-e89dc8279d65")
 }
