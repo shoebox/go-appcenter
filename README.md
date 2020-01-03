@@ -22,7 +22,7 @@ Image is hosted on DockerHub:
 
 To run it:
 
-> docker run sho3box/go-appcenter:latest
+	docker run sho3box/go-appcenter:latest
 
 ## Via GO CLI
 
