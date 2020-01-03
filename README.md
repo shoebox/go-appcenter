@@ -17,7 +17,12 @@ AppCenter.ms client made in GO
 
 ## Via Docker
 
-TBD
+Image is hosted on DockerHub:
+> https://hub.docker.com/repository/docker/sho3box/go-appcenter
+
+To run it:
+
+> docker run sho3box/go-appcenter:latest
 
 ## Via GO CLI
 
@@ -26,28 +31,22 @@ TBD
 Will return:
 
 	NAME:
-		Golang AppCenter.ms - Upload and distribute binaries on the AppCenter platform
+	Golang AppCenter.ms - Upload and distribute binaries on the AppCenter platform
 
 	USAGE:
-		goappcenter [global options] command [command options] [arguments...]
+	go-appcenter [global options] command [command options] [arguments...]
 
 	VERSION:
-		0.0.0
+	0.0.0
 
 	COMMANDS:
-		upload
-		help, h  Shows a list of commands or help for one command
+	upload
+	help, h  Shows a list of commands or help for one command
 
 	GLOBAL OPTIONS:
-		--apiKey value        AppCenter.ms API key
-		--appName value       AppCenter app name
-		--ownerName value     AppCenter owner name
-		--buildNumber value   Release build number
-		--buildVersion value  Release build version
-		--releaseId value     Release version Id (default: 0)
-		--help, -h            show help (default: false)
-		--version, -v         print the version (default: false)
-			errr :  Required flags "apiKey, appName, ownerName" not set
+	--apiKey value  AppCenter.ms API key [$AppCenterAPIKey]
+	--help, -h      show help (default: false)
+	--version, -v   print the version (default: false)
 
 # Dependencies
 
