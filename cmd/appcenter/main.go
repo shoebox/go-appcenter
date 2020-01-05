@@ -18,7 +18,8 @@ var request = appcenter.UploadRequest{
 func main() {
 
 	app := cli.App{
-		Name: "go-appcenter",
+		Name:    "go-appcenter",
+		Version: "0.1.0",
 	}
 
 	app.Flags = []cli.Flag{
