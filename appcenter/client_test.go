@@ -1,6 +1,7 @@
 package appcenter
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,10 @@ func openServer(APIKey string) {
 	server = httptest.NewServer(mux)
 	url, _ := url.Parse(server.URL)
 
+	setupClient(APIKey, url)
+}
+
+func setupClient(APIKey string, url *url.URL) {
 	testClient = NewClient(APIKey)
 	testClient.BaseURL = url
 }
@@ -88,7 +93,7 @@ func TestNewRequestWithPayload(t *testing.T) {
 		body := map[string]interface{}{
 			"foo": make(chan int),
 		}
-		req, err := newRequestWithPayload("POST", "http://www.google.com", body)
+		req, err := testClient.NewRequestWithPayload("POST", "http://www.google.com", body)
 
 		assert.Nil(t, req)
 		assert.EqualError(t, err, "Error marshalling body "+
@@ -96,7 +101,7 @@ func TestNewRequestWithPayload(t *testing.T) {
 	})
 
 	t.Run("When request creation fails", func(t *testing.T) {
-		req, err := newRequestWithPayload("bad method", "", nil)
+		req, err := testClient.NewRequestWithPayload("bad method", "", nil)
 		assert.Nil(t, req)
 		assert.EqualError(t, err, "Error creating request (Error : net/http: "+
 			"invalid method \"bad method\")")
@@ -104,10 +109,70 @@ func TestNewRequestWithPayload(t *testing.T) {
 
 	t.Run("Should apply argument", func(t *testing.T) {
 		fakeURL := "http://fake-url.com/test"
-		req, err := newRequestWithPayload("PATCH", fakeURL, []string{})
+		req, err := testClient.NewRequestWithPayload("PATCH", fakeURL, []string{})
 		assert.Nil(t, err)
 
 		assert.Equal(t, req.Method, "PATCH")
 		assert.Equal(t, req.URL.String(), fakeURL)
 	})
+}
+
+func TestTokenApplication(t *testing.T) {
+	// setup
+	key := "123-456-XYZ"
+	setupClient(key, nil)
+
+	// when:
+	head := http.Header{}
+	testClient.ApplyTokenToRequest(&head)
+
+	// then:
+	assert.EqualValues(t, head.Get("X-API-Token"), key)
+}
+
+func TestJsonHeader(t *testing.T) {
+	setupClient("", nil)
+
+	// when
+	head := http.Header{}
+	testClient.RequestContentTypeJSON(&head)
+
+	// then:
+	assert.EqualValues(t, head.Get("Content-Type"), "application/json")
+}
+
+func TestUnMarshall(t *testing.T) {
+	t.Run("Should handle reading errors", func(t *testing.T) {
+		// setup:
+		setupClient("", nil)
+		r := errReader(0)
+
+		// when:
+		err := testClient.unmarshal(r, nil)
+
+		// then:
+		assert.EqualError(t, err, "Test error")
+	})
+
+	t.Run("Should handle JSON decoding errors", func(t *testing.T) {
+		// setup:
+		setupClient("", nil)
+		reader := strings.NewReader("Invalid json")
+
+		// when:
+		err := testClient.unmarshal(reader, nil)
+
+		// then:
+		assert.EqualError(t, err, "invalid character 'I' looking for beginning of value")
+	})
+}
+
+type errReader int
+
+func (r errReader) Close() error {
+	return nil
+}
+
+func (errReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("Test error")
 }

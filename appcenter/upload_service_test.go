@@ -375,6 +375,10 @@ func handleUploadRequestSuccess(t *testing.T, w http.ResponseWriter, r *http.Req
 }
 
 func TestDoUploadRequest(t *testing.T) {
+	t.Run("Should handle release uploadd request errors", func(t *testing.T) {
+		
+	})
+
 	t.Run("Should handle success", func(t *testing.T) {
 		serverTest(t, handleUploadRequestSuccess)
 		defer closeServer()
@@ -405,7 +409,7 @@ func TestDoUploadRequest(t *testing.T) {
 		defer closeServer()
 
 		resp, err := testClient.Upload.doUploadRequest(request)
-		assert.EqualError(t, err, "toto")
+		assert.EqualError(t, err, "HTTP request failed: 404 Not Found")
 		assert.Nil(t, resp)
 	})
 }

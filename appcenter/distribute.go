@@ -58,7 +58,7 @@ func (s *DistributeService) requestGroup(groupName string,
 			appName,
 			groupName), nil)
 
-	req = s.client.ApplyTokenToRequest(req)
+	s.client.ApplyTokenToRequest(&req.Header)
 
 	if err != nil {
 		return nil, err
@@ -66,7 +66,7 @@ func (s *DistributeService) requestGroup(groupName string,
 
 	// Do the request
 	response := &distributionGroupResponse{}
-	_, err = s.client.do(req, response)
+	_, err = s.client.Do(req, response)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 	releaseID string,
 	groupID string) error {
 
-	req, err := newRequestWithPayload("POST",
+	req, err := s.client.NewRequestWithPayload("POST",
 		fmt.Sprintf("%s/apps/%s/%s/releases/%s/groups",
 			s.client.BaseURL,
 			ownerName,
@@ -97,7 +97,8 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 		return err
 	}
 
-	req = s.client.ApplyTokenToRequest(requestContentTypeJSON(req))
+	s.client.ApplyTokenToRequest(&req.Header)
+	s.client.RequestContentTypeJSON(&req.Header)
 
 	resp, err := s.client.client.Do(req)
 	if err != nil {

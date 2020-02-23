@@ -82,7 +82,7 @@ func checkError(r *http.Response) *StatusError {
 	return errorResponse
 }
 
-func newRequestWithPayload(method string,
+func (c *Client) NewRequestWithPayload(method string,
 	url string,
 	body interface{}) (*http.Request, error) {
 
@@ -100,51 +100,43 @@ func newRequestWithPayload(method string,
 	return req, err
 }
 
-func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
-	req.Header.Add("X-API-Token", c.APIKey)
-	return req
+func (c *Client) ApplyTokenToRequest(h *http.Header) {
+	h.Add("X-API-Token", c.APIKey)
 }
 
-func requestContentTypeJSON(req *http.Request) *http.Request {
-	req.Header.Add("Content-Type", "application/json")
-	return req
+func (c *Client) RequestContentTypeJSON(h *http.Header) {
+	h.Add("Content-Type", "application/json")
 }
 
-func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
+func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
+	// Invoke HTTP client
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 
-	defer func() {
-		//nolint:errcheck
-		io.CopyN(ioutil.Discard, resp.Body, 512)
-		resp.Body.Close()
-	}()
+	// Close body
+	defer resp.Body.Close()
 
+	// Compose result
 	response := &Response{
 		Response:    resp,
 		StatusError: checkError(resp),
 	}
 
+	// Try to unmarshal
 	if v != nil {
-		if w, ok := v.(io.Writer); ok {
-			_, err := io.Copy(w, resp.Body)
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			body, err := ioutil.ReadAll(response.Body)
-			if err != nil {
-				return nil, err
-			}
-
-			err = json.Unmarshal(body, &v)
-			if err == io.EOF {
-				err = nil // ignore EOF errors caused by empty response body
-			}
-		}
+		c.unmarshal(resp.Body, &v)
 	}
 
 	return response, err
+}
+
+func (c *Client) unmarshal(reader io.Reader, v *interface{}) error {
+	body, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(body, v)
 }

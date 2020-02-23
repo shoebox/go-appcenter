@@ -121,7 +121,7 @@ func (s *UploadService) doFileUpload(r UploadRequest, uploadURL string, reader i
 func (s *UploadService) releaseUploadsRequest(r UploadRequest,
 	res *releaseUploadsResponse) (*Response, error) {
 
-	req, err := newRequestWithPayload("POST",
+	req, err := s.client.NewRequestWithPayload("POST",
 		fmt.Sprintf("%s/apps/%s/%s/release_uploads",
 			s.client.BaseURL,
 			r.OwnerName,
@@ -135,7 +135,7 @@ func (s *UploadService) releaseUploadsRequest(r UploadRequest,
 		return nil, err
 	}
 
-	return s.client.do(req, &res)
+	return s.client.Do(req, &res)
 }
 
 func (s *UploadService) doUploadRequest(r UploadRequest) (*releaseUploadsResponse, error) {
