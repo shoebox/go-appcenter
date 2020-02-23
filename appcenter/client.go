@@ -126,7 +126,7 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 
 	// Try to unmarshal
 	if v != nil {
-		c.unmarshal(resp.Body, &v)
+		err = c.unmarshal(resp.Body, &v)
 	}
 
 	return response, err
