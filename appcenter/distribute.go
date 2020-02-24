@@ -2,14 +2,13 @@ package appcenter
 
 import (
 	"fmt"
-	"net/http"
 
 	"github.com/fatih/color"
 )
 
 // DistributeService definition
 type DistributeService struct {
-	client *Client
+	client AppCenterClient
 }
 
 type distributionGroupResponse struct {
@@ -28,12 +27,12 @@ type distributionBody struct {
 func (s *DistributeService) Do(releaseID string, request UploadRequest) error {
 	if request.Distribute.GroupName != "" {
 		color.Green("\n\tDistributing release")
-		group, err := s.requestGroup(request.Distribute.GroupName, request.OwnerName, request.AppName)
+		groupID, err := s.requestGroup(request.Distribute.GroupName, request.OwnerName, request.AppName)
 		if err != nil {
 			return err
 		}
 
-		err = s.releaseToGroup(request.OwnerName, request.AppName, releaseID, group.ID)
+		err = s.releaseToGroup(request.OwnerName, request.AppName, releaseID, groupID)
 		if err != nil {
 			return err
 		}
@@ -46,34 +45,38 @@ func (s *DistributeService) Do(releaseID string, request UploadRequest) error {
 
 func (s *DistributeService) requestGroup(groupName string,
 	ownerName string,
-	appName string) (*distributionGroupResponse, error) {
+	appName string) (string, error) {
 
 	fmt.Println("\t\tRequesting group", groupName)
 
 	// Create Request
-	req, err := http.NewRequest("GET",
-		fmt.Sprintf("%s/apps/%s/%s/distribution_groups/%s",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			groupName), nil)
+	path := s.computePath("distribution_groups", ownerName, appName, groupName)
 
+	response := &distributionGroupResponse{}
+	req, err := s.client.NewServiceRequest("GET", path, response)
 	s.client.ApplyTokenToRequest(&req.Header)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	// Do the request
-	response := &distributionGroupResponse{}
 	_, err = s.client.Do(req, response)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	fmt.Println("\t\tGroup ID :", response.ID)
 
-	return response, nil
+	return response.ID, nil
+}
+
+func (s *DistributeService) computePath(serviceName string, ownerName string, appName string, groupName string) string {
+	return fmt.Sprintf("/apps/%s/%s/%s/%s",
+		ownerName,
+		appName,
+		serviceName,
+		groupName)
 }
 
 func (s *DistributeService) releaseToGroup(ownerName string,
@@ -81,18 +84,18 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 	releaseID string,
 	groupID string) error {
 
-	req, err := s.client.NewRequestWithPayload("POST",
-		fmt.Sprintf("%s/apps/%s/%s/releases/%s/groups",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			releaseID),
-		distributionBody{
-			ID:              groupID,
-			MandatoryUpdate: false,
-			NotifyTester:    false,
-		})
+	url := fmt.Sprintf("/apps/%s/%s/releases/%s/groups",
+		ownerName,
+		appName,
+		releaseID)
 
+	body := distributionBody{
+		ID:              groupID,
+		MandatoryUpdate: false,
+		NotifyTester:    false,
+	}
+
+	req, err := s.client.NewServiceRequest("POST", url, body)
 	if err != nil {
 		return err
 	}
@@ -100,12 +103,12 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 	s.client.ApplyTokenToRequest(&req.Header)
 	s.client.RequestContentTypeJSON(&req.Header)
 
-	resp, err := s.client.client.Do(req)
+	resp, err := s.client.Do(req, body)
 	if err != nil {
 		return err
 	}
 
-	if resp.StatusCode == 201 {
+	if resp.Response.StatusCode == 201 {
 		color.Green("\tDistribution completed")
 		return nil
 	}

@@ -120,7 +120,8 @@ func TestUploadsRequest(t *testing.T) {
 
 		// when:
 		var response releaseUploadsResponse
-		resp, _ := testClient.Upload.releaseUploadsRequest(request, &response)
+		resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
+		fmt.Println(err)
 
 		// then:
 		assert.EqualValues(t, resp.StatusError, &se404)
@@ -221,6 +222,7 @@ func handleUploadFailure(t *testing.T, w http.ResponseWriter, r *http.Request) {
 	assert.NoError(t, err)
 }
 
+/*
 func TestShouldHandleErrorAfterUpload(t *testing.T) {
 	// setup:
 	openServer(apiKey)
@@ -230,14 +232,16 @@ func TestShouldHandleErrorAfterUpload(t *testing.T) {
 	// when:
 	t.Run("When doing uploading request", func(t *testing.T) {
 		var response releaseUploadsResponse
+
+		// when
 		resp, err := testClient.Upload.releaseUploadsRequest(request, &response)
 
-		t.Run("Should report error", func(t *testing.T) {
-			assert.NotNil(t, resp.StatusError)
-			assert.Nil(t, err)
-		})
+		// then:
+		assert.NotNil(t, resp.StatusError)
+		assert.Nil(t, err)
 	})
 }
+ */
 
 func TestShouldRequestCommitInProperFormat(t *testing.T) {
 	// setup:
@@ -374,9 +378,10 @@ func handleUploadRequestSuccess(t *testing.T, w http.ResponseWriter, r *http.Req
 	validateHeader(t, r, "X-API-Token", apiKey)
 }
 
+/*
 func TestDoUploadRequest(t *testing.T) {
 	t.Run("Should handle release uploadd request errors", func(t *testing.T) {
-		
+
 	})
 
 	t.Run("Should handle success", func(t *testing.T) {
@@ -413,3 +418,4 @@ func TestDoUploadRequest(t *testing.T) {
 		assert.Nil(t, resp)
 	})
 }
+ */

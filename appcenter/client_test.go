@@ -148,7 +148,7 @@ func TestUnMarshall(t *testing.T) {
 		r := errReader(0)
 
 		// when:
-		err := testClient.unmarshal(r, nil)
+		err := testClient.unmarshall(&r, nil)
 
 		// then:
 		assert.EqualError(t, err, "Test error")
@@ -160,7 +160,7 @@ func TestUnMarshall(t *testing.T) {
 		reader := strings.NewReader("Invalid json")
 
 		// when:
-		err := testClient.unmarshal(reader, nil)
+		err := testClient.unmarshall(reader, nil)
 
 		// then:
 		assert.EqualError(t, err, "invalid character 'I' looking for beginning of value")
