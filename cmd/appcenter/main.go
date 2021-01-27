@@ -4,18 +4,22 @@ import (
 	"goappcenter/appcenter"
 	"os"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
 )
 
 // AppCenter API Key
 var APIKey string
 
-var request = appcenter.UploadRequest{
+var request = appcenter.UploadTask{
 	Distribute: appcenter.DistributionPayload{},
 	Option:     appcenter.ReleaseUploadPayload{},
 }
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	zerolog.SetGlobalLevel(zerolog.InfoLevel)
 
 	app := cli.App{
 		Name:    "go-appcenter",
@@ -34,7 +38,7 @@ func main() {
 	app.Name = "Golang AppCenter.ms"
 	app.Usage = "Upload and distribute binaries on the AppCenter platform"
 	app.Commands = []*cli.Command{
-		&cli.Command{
+		{
 			Name: "upload",
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
@@ -87,8 +91,7 @@ func main() {
 		},
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
+	if err := app.Run(os.Args); err != nil {
 		panic(err)
 	}
 }
@@ -96,13 +99,16 @@ func main() {
 func executeUpload(c *cli.Context) error {
 	client := appcenter.NewClient(APIKey)
 
-	releaseID, err := client.Upload.Do(request)
+	client.Config.AppName = request.AppName
+	client.Config.OwnerName = request.OwnerName
+
+	releaseID, err := client.Upload.Do(c, request)
 	if err != nil {
 		return err
 	}
 
 	if request.Distribute.GroupName != "" {
-		return client.Distribute.Do(*releaseID, request)
+		return client.Distribute.Do(c, releaseID, request)
 	}
 
 	return nil

@@ -1,13 +1,16 @@
 package appcenter
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/url"
+
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -28,13 +31,18 @@ type Client struct {
 	Upload *UploadService
 
 	Distribute *DistributeService
+
+	Config struct {
+		OwnerName string
+		AppName   string
+	}
 }
 
 // NewClient create a new instance of the client for the provided APIKey
 func NewClient(APIKey string) *Client {
 	baseURL, err := url.Parse(BaseURL)
 	if err != nil {
-		log.Panic(err)
+		log.Err(err)
 	}
 
 	c := &Client{APIKey: APIKey}
@@ -51,8 +59,8 @@ type Response struct {
 	*StatusError
 }
 
-// AppCenterError errors
-type AppCenterError struct {
+// AppCenterResponseError errors
+type AppCenterResponseError struct {
 	Message string `json:"message"`
 }
 
@@ -61,6 +69,10 @@ type StatusError struct {
 	Code       string `json:"Code"`
 	StatusCode int    `json:"StatusCode"`
 	Message    string `json:"Message"`
+}
+
+func (se StatusError) Error() string {
+	return fmt.Sprintf("HTTP Error %v %v %v", se.Code, se.StatusCode, se.Message)
 }
 
 func checkError(r *http.Response) *StatusError {
@@ -73,7 +85,6 @@ func checkError(r *http.Response) *StatusError {
 	err := json.Unmarshal(body, errorResponse)
 
 	if err != nil {
-		fmt.Println("> failed to parse response body as JSON")
 		// failed to unmarhsal API Error, use body as Message
 		errorResponse.Message = string(body)
 	}
@@ -89,6 +100,20 @@ func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
 func RequestContentTypeJson(req *http.Request) *http.Request {
 	req.Header.Add("Content-Type", "application/json")
 	return req
+}
+
+func (c *Client) simpleRequest(ctx context.Context, method string, url string, body interface{}, responseBody interface{}) (*Response, error) {
+	var b io.Reader
+	if r, ok := body.(io.Reader); ok {
+		b = r
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, url, b)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.do(req, &responseBody)
 }
 
 func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
@@ -120,6 +145,8 @@ func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
 				return nil, err
 			}
 
+			log.Debug().Str("Body", string(body)).Msg("Response")
+
 			err = json.Unmarshal(body, &v)
 			if err == io.EOF {
 				err = nil // ignore EOF errors caused by empty response body
@@ -128,4 +155,48 @@ func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
 	}
 
 	return response, err
+}
+
+func (c *Client) NewAPIRequest(
+	ctx context.Context,
+	method string,
+	path string,
+	requestBody interface{},
+	responseBody interface{},
+) error {
+	body := new(bytes.Buffer)
+	if requestBody != nil {
+		err := json.NewEncoder(body).Encode(requestBody)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create Request
+	req, err := http.NewRequestWithContext(
+		ctx,
+		method,
+		fmt.Sprintf("%s/apps/%s/%s/%s",
+			BaseURL,
+			c.Config.OwnerName,
+			c.Config.AppName,
+			path), body)
+
+	req.Header.Add("Content-Type", "application/json")
+
+	log.Debug().Str("URL", req.URL.String()).Msg("API Request")
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.do(c.ApplyTokenToRequest(req), &responseBody)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusError != nil {
+		return resp.StatusError
+	}
+
+	return nil
 }

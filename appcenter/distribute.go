@@ -1,12 +1,11 @@
 package appcenter
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 
-	"github.com/fatih/color"
+	"github.com/rs/zerolog/log"
 )
 
 // DistributeService definition
@@ -26,16 +25,23 @@ type distributionBody struct {
 	NotifyTester    bool   `json:"notify_testers"`
 }
 
+type distributionResponse struct {
+	ID                    string `json:"id"`
+	MandatoryUpdate       bool   `json:"mandatory_update"`
+	ProvisioningStatusURL string `json:"provisioning_status_url"`
+}
+
 // Do Distribute the designated release into the provided configuration
-func (s *DistributeService) Do(releaseID string, request UploadRequest) error {
+func (s *DistributeService) Do(ctx context.Context, releaseID int64, request UploadTask) error {
 	if request.Distribute.GroupName != "" {
-		color.Green("\n\tDistributing release")
+		log.Info().Str("Group name", request.Distribute.GroupName).Msg("Request distribution group by name")
 		group, err := s.requestGroup(request.Distribute.GroupName, request.OwnerName, request.AppName)
 		if err != nil {
 			return err
 		}
 
-		err = s.releaseToGroup(request.OwnerName, request.AppName, releaseID, group.ID)
+		log.Info().Str("Group ID", group.ID).Msg("Distributing to group")
+		err = s.releaseToGroup(ctx, request.OwnerName, request.AppName, releaseID, group.ID)
 		if err != nil {
 			return err
 		}
@@ -50,7 +56,7 @@ func (s *DistributeService) requestGroup(groupName string,
 	ownerName string,
 	appName string) (*distributionGroupResponse, error) {
 
-	fmt.Println("\t\tRequesting group", groupName)
+	log.Info().Str("Group name", groupName).Msg("Requesting group")
 
 	// Create Request
 	req, err := http.NewRequest("GET",
@@ -68,19 +74,25 @@ func (s *DistributeService) requestGroup(groupName string,
 
 	// Do the request
 	response := &distributionGroupResponse{}
-	_, err = s.client.do(req, response)
+	resp, err := s.client.do(req, response)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("\t\tGroup ID :", response.ID)
+	if resp.StatusError != nil {
+		return nil, resp.StatusError
+	}
+
+	log.Info().Str("Group ID", response.ID).Msg("Group ID resolved successfully")
 
 	return response, nil
 }
 
-func (s *DistributeService) releaseToGroup(ownerName string,
+func (s *DistributeService) releaseToGroup(
+	ctx context.Context,
+	ownerName string,
 	appName string,
-	releaseID string,
+	releaseID int64,
 	groupID string) error {
 
 	body := distributionBody{
@@ -89,38 +101,14 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 		NotifyTester:    false,
 	}
 
-	payload, err := json.Marshal(body)
+	r := distributionResponse{}
+
+	path := fmt.Sprintf("releases/%v/groups", releaseID)
+
+	err := s.client.NewAPIRequest(ctx, http.MethodPost, path, &body, &r)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("%s/apps/%s/%s/releases/%s/groups",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			releaseID),
-		bytes.NewBuffer(payload))
-
-	req = RequestContentTypeJson(req)
-	req = s.client.ApplyTokenToRequest(req)
-	if err != nil {
-		return err
-	}
-
-	resp, err := s.client.client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode == 201 {
-		color.Green("\tDistribution completed")
-		return nil
-	} else {
-		// TODO: Wrap better the error here
-		return fmt.Errorf("Failed to share release %v to group %v (Error : %v)",
-			releaseID,
-			groupID,
-			resp)
-	}
+	return nil
 }
