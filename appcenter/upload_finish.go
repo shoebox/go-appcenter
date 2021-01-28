@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pterm/pterm"
 )
 
+// FinishingUploadResponse response definition of the upload finished endpoint
 type FinishingUploadResponse struct {
 	Error        *bool   `json:"error,omitempty"`
 	ChunkNum     *int64  `json:"chunk_num,omitempty"`
@@ -20,6 +21,7 @@ type FinishingUploadResponse struct {
 	UploadStatus *string `json:"uploadstatus,omitempty"`
 }
 
+// FinishingUpload will notify AppCenter that the upload is finished
 func (s *UploadService) FinishingUpload(
 	ctx context.Context,
 	uploadDomain string,
@@ -27,7 +29,10 @@ func (s *UploadService) FinishingUpload(
 	urlEncodedToken string,
 	ID string,
 ) (*FinishingUploadResponse, error) {
-	log.Info().Msg("Finishing upload")
+	sp, err := pterm.DefaultSpinner.Start("Completing upload")
+	if err != nil {
+		return nil, err
+	}
 
 	var res FinishingUploadResponse
 
@@ -38,9 +43,9 @@ func (s *UploadService) FinishingUpload(
 		urlEncodedToken,
 	)
 
-	_, err := s.client.simpleRequest(ctx, http.MethodPost, url, nil, &res)
-	if err != nil {
-		return &res, err
+	_, err = s.client.simpleRequest(ctx, http.MethodPost, url, nil, &res)
+	if err == nil {
+		sp.Success()
 	}
 
 	return &res, err

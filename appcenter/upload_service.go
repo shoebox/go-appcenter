@@ -11,6 +11,7 @@ type UploadService struct {
 	client *Client
 }
 
+// DistributionPayload upload definition
 type DistributionPayload struct {
 	GroupName string
 }
@@ -22,7 +23,8 @@ type ReleaseUploadPayload struct {
 	BuildNumber  string `json:"build_number,omitempty"`
 }
 
-type metadataResponse struct {
+// MetadataResponse response body from the metadata set endpoint
+type MetadataResponse struct {
 	Error          *bool   `json:"error,omitempty"`
 	ID             *string `json:"id,omitempty"`
 	ChunkSize      *int    `json:"chunk_size,omitempty"`
@@ -49,7 +51,7 @@ func (s *UploadService) Do(ctx context.Context, r UploadTask) (int64, error) {
 	if err != nil {
 		return -1, NewAppCenterError(InputFileError, err)
 	}
-	content_type := ResolveContentType(filepath.Ext(p))
+	contentType := ResolveContentType(filepath.Ext(p))
 
 	// get target file infos
 	fi, err := os.Stat(p)
@@ -65,7 +67,7 @@ func (s *UploadService) Do(ctx context.Context, r UploadTask) (int64, error) {
 		fi.Name(),
 		fi.Size(),
 		ur.URLEncodedToken,
-		content_type,
+		contentType,
 		r.Option.BuildNumber,
 		r.Option.BuildVersion,
 	)
@@ -91,7 +93,7 @@ func (s *UploadService) Do(ctx context.Context, r UploadTask) (int64, error) {
 		*meta.ChunkSize,
 		len(meta.ChunkList),
 		fi.Size(),
-		content_type,
+		contentType,
 	)
 
 	if err != nil {
@@ -115,15 +117,9 @@ func (s *UploadService) Do(ctx context.Context, r UploadTask) (int64, error) {
 		return -1, err
 	}
 
+	if err := s.UploadResult(ctx, rdid); err != nil {
+		return -1, err
+	}
+
 	return rdid, nil
-}
-
-type CommitUploadBody struct {
-	Status string `json:"upload_status"`
-	ID     string `json:"upload_id"`
-}
-
-type CommitUploadResponse struct {
-	ID     string `json:"id"`
-	Status string `json:"upload_status"`
 }

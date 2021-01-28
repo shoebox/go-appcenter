@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pterm/pterm"
 )
 
 // DistributeService definition
@@ -26,66 +26,56 @@ type distributionBody struct {
 }
 
 type distributionResponse struct {
-	ID                    string `json:"id"`
+	GroupID               string `json:"id"`
 	MandatoryUpdate       bool   `json:"mandatory_update"`
 	ProvisioningStatusURL string `json:"provisioning_status_url"`
 }
 
 // Do Distribute the designated release into the provided configuration
 func (s *DistributeService) Do(ctx context.Context, releaseID int64, request UploadTask) error {
+
 	if request.Distribute.GroupName != "" {
-		log.Info().Str("Group name", request.Distribute.GroupName).Msg("Request distribution group by name")
-		group, err := s.requestGroup(request.Distribute.GroupName, request.OwnerName, request.AppName)
+		group, err := s.requestGroup(ctx, request.Distribute.GroupName, request.OwnerName, request.AppName)
 		if err != nil {
 			return err
 		}
 
-		log.Info().Str("Group ID", group.ID).Msg("Distributing to group")
 		err = s.releaseToGroup(ctx, request.OwnerName, request.AppName, releaseID, group.ID)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return err
 	}
 
 	return nil
 }
 
-func (s *DistributeService) requestGroup(groupName string,
+func (s *DistributeService) requestGroup(
+	ctx context.Context,
+	groupName string,
 	ownerName string,
-	appName string) (*distributionGroupResponse, error) {
+	appName string,
+) (*distributionGroupResponse, error) {
+	var res distributionGroupResponse
 
-	log.Info().Str("Group name", groupName).Msg("Requesting group")
-
-	// Create Request
-	req, err := http.NewRequest("GET",
-		fmt.Sprintf("%s/apps/%s/%s/distribution_groups/%s",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			groupName), nil)
-
-	req = s.client.ApplyTokenToRequest(req)
-
+	sp, err := pterm.DefaultSpinner.Start(fmt.Sprintf("Requesting distribution group ID from name '%v'", groupName))
 	if err != nil {
-		return nil, err
+		return &res, err
 	}
 
-	// Do the request
-	response := &distributionGroupResponse{}
-	resp, err := s.client.do(req, response)
-	if err != nil {
-		return nil, err
+	err = s.client.NewAPIRequest(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("distribution_groups/%s", groupName),
+		nil,
+		&res,
+	)
+
+	if err == nil {
+		sp.UpdateText(fmt.Sprintf("Distribution group ID resolved: %v", res.ID))
+		sp.Success()
+	} else {
+		sp.Fail()
 	}
 
-	if resp.StatusError != nil {
-		return nil, resp.StatusError
-	}
-
-	log.Info().Str("Group ID", response.ID).Msg("Group ID resolved successfully")
-
-	return response, nil
+	return &res, err
 }
 
 func (s *DistributeService) releaseToGroup(
@@ -94,6 +84,11 @@ func (s *DistributeService) releaseToGroup(
 	appName string,
 	releaseID int64,
 	groupID string) error {
+
+	sp, err := pterm.DefaultSpinner.Start("Releasing to group")
+	if err != nil {
+		return err
+	}
 
 	body := distributionBody{
 		ID:              groupID,
@@ -105,10 +100,13 @@ func (s *DistributeService) releaseToGroup(
 
 	path := fmt.Sprintf("releases/%v/groups", releaseID)
 
-	err := s.client.NewAPIRequest(ctx, http.MethodPost, path, &body, &r)
+	err = s.client.NewAPIRequest(ctx, http.MethodPost, path, &body, &r)
 	if err != nil {
+		sp.Fail()
 		return err
 	}
+
+	sp.Success()
 
 	return nil
 }

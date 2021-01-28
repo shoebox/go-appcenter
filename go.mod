@@ -10,8 +10,8 @@ require (
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/mattn/go-colorable v0.1.4 // indirect
 	github.com/mattn/go-isatty v0.0.10 // indirect
-	github.com/mattn/go-runewidth v0.0.6 // indirect
 	github.com/peterh/liner v1.1.0 // indirect
+	github.com/pterm/pterm v0.12.8
 	github.com/rs/zerolog v1.20.0
 	github.com/silenceper/log v0.0.0-20171204144354-e5ac7fa8a76a
 	github.com/sirupsen/logrus v1.4.2 // indirect

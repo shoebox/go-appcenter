@@ -59,8 +59,8 @@ type Response struct {
 	*StatusError
 }
 
-// AppCenterResponseError errors
-type AppCenterResponseError struct {
+// ResponseError errors
+type ResponseError struct {
 	Message string `json:"message"`
 }
 
@@ -69,10 +69,18 @@ type StatusError struct {
 	Code       string `json:"Code"`
 	StatusCode int    `json:"StatusCode"`
 	Message    string `json:"Message"`
+
+	Err *struct {
+		Code    string `json:"Code"`
+		Message string `json:"Message"`
+	} `json:"error,omitempty"`
 }
 
 func (se StatusError) Error() string {
-	return fmt.Sprintf("HTTP Error %v %v %v", se.Code, se.StatusCode, se.Message)
+	if se.Err != nil {
+		return fmt.Sprintf("Error Code: '%v' Message: '%v' ", se.Err.Code, se.Err.Message)
+	}
+	return fmt.Sprintf("Error Code: '%v' StatusCode: '%v' Message: '%v'", se.Code, se.StatusCode, se.Message)
 }
 
 func checkError(r *http.Response) *StatusError {
@@ -81,24 +89,15 @@ func checkError(r *http.Response) *StatusError {
 	}
 
 	errorResponse := &StatusError{}
-	body, _ := ioutil.ReadAll(r.Body)
-	err := json.Unmarshal(body, errorResponse)
-
-	if err != nil {
-		// failed to unmarhsal API Error, use body as Message
-		errorResponse.Message = string(body)
+	if err := json.NewDecoder(r.Body).Decode(errorResponse); err != nil {
+		return &StatusError{Message: "Failed to decode response body"}
 	}
 
 	return errorResponse
 }
 
-func (c *Client) ApplyTokenToRequest(req *http.Request) *http.Request {
+func (c *Client) applyTokenToRequest(req *http.Request) *http.Request {
 	req.Header.Add("X-API-Token", c.APIKey)
-	return req
-}
-
-func RequestContentTypeJson(req *http.Request) *http.Request {
-	req.Header.Add("Content-Type", "application/json")
 	return req
 }
 
@@ -157,6 +156,7 @@ func (c *Client) do(req *http.Request, v interface{}) (*Response, error) {
 	return response, err
 }
 
+// NewAPIRequest is a helper method to do request to AppCenter OpenAPI endpoints
 func (c *Client) NewAPIRequest(
 	ctx context.Context,
 	method string,
@@ -181,6 +181,9 @@ func (c *Client) NewAPIRequest(
 			c.Config.OwnerName,
 			c.Config.AppName,
 			path), body)
+	if err != nil {
+		return err
+	}
 
 	req.Header.Add("Content-Type", "application/json")
 
@@ -189,7 +192,7 @@ func (c *Client) NewAPIRequest(
 		return err
 	}
 
-	resp, err := c.do(c.ApplyTokenToRequest(req), &responseBody)
+	resp, err := c.do(c.applyTokenToRequest(req), &responseBody)
 	if err != nil {
 		return err
 	}

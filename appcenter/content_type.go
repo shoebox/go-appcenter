@@ -18,12 +18,14 @@ var mapping = map[string]string{
 	"msixsym":    "application/x-msixupload",
 }
 
-const Default = "application/octet-stream"
+const defaultOctetStream = "application/octet-stream"
 
-func ResolveContentType(e string) string {
-	if val, ok := mapping[e]; ok {
+// ResolveContentType will resolve the right content type for the provided extension name. If the
+// provided extension is not of a support format, it will return defaultOctetStream as default
+func ResolveContentType(fileExtension string) string {
+	if val, ok := mapping[fileExtension]; ok {
 		return val
 	}
 
-	return Default
+	return defaultOctetStream
 }

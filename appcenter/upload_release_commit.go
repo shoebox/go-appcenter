@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pterm/pterm"
 )
 
 type commitUploadBody struct {
@@ -14,19 +14,19 @@ type commitUploadBody struct {
 	ReleaseID int    `json:"release_distinct_id"`
 }
 
-type CommitReleaseResponse struct {
+type commitReleaseResponse struct {
 	ID                string `json:"id"`
 	UploadStatus      string `json:"upload_status"`
-	ReleaseDistinctId int    `json:"release_distinct_id"`
+	ReleaseDistinctID int    `json:"release_distinct_id"`
 }
 
 func (s *UploadService) UploadCommitRelease(ctx context.Context, id string, uploadID string) (*string, error) {
-	log.Info().
-		Str("ID", id).
-		Str("UploadID", uploadID).
-		Msg("Updating the status of the release upload")
+	sp, err := pterm.DefaultSpinner.Start("Updating status of the release")
+	if err != nil {
+		return nil, err
+	}
 
-	var res CommitReleaseResponse
+	var res commitReleaseResponse
 	path := fmt.Sprintf("uploads/releases/%v", uploadID)
 
 	//
@@ -37,7 +37,10 @@ func (s *UploadService) UploadCommitRelease(ctx context.Context, id string, uplo
 		commitUploadBody{Status: "uploadFinished", ID: uploadID},
 		&res,
 	); err != nil {
+		sp.Fail()
 		return nil, err
 	}
+
+	sp.Success(fmt.Sprintf("Release status update complete (Release ID: '%v')", res.ID))
 	return &res.ID, nil
 }

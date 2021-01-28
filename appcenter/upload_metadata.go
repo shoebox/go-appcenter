@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pterm/pterm"
 )
 
 type uploadReleaseBody struct {
@@ -13,6 +13,7 @@ type uploadReleaseBody struct {
 	BuildNumber  string `json:"build_number"`
 }
 
+// SetMetaData will apply meta data to the upload slot
 func (s *UploadService) SetMetaData(
 	ctx context.Context,
 	uploadDomain string,
@@ -20,16 +21,14 @@ func (s *UploadService) SetMetaData(
 	fileName string,
 	fileSize int64,
 	token string,
-	content_type string,
+	contentType string,
 	buildNumber string,
 	buildVersion string,
-) (*metadataResponse, error) {
-	log.Info().
-		Str("Upload Domain", uploadDomain).
-		Str("Token", token).
-		Str("Content-Type", content_type).
-		Str("File-Name", fileName).
-		Msg("Applying meta data for upload")
+) (*MetadataResponse, error) {
+	sp, err := pterm.DefaultSpinner.Start("Applying meta-data")
+	if err != nil {
+		return nil, NewAppCenterError(UploadRequestError, nil)
+	}
 
 	url := fmt.Sprintf(
 		"%v/upload/set_metadata/%v?file_name=%v&file_size=%v&token=%v&content_type=%v",
@@ -38,7 +37,7 @@ func (s *UploadService) SetMetaData(
 		fileName,
 		fileSize,
 		token,
-		content_type,
+		contentType,
 	)
 
 	// optional body
@@ -51,12 +50,13 @@ func (s *UploadService) SetMetaData(
 		body.BuildVersion = buildVersion
 	}
 
-	var m metadataResponse
+	var m MetadataResponse
 	if _, err := s.client.simpleRequest(ctx, http.MethodPost, url, &body, &m); err != nil {
 		return &m, NewAppCenterError(MetadataError, err)
 	}
 
-	log.Info().Msg("Metadata applied")
+	sp.UpdateText("Metadata applied succesfully")
+	sp.Success()
 
 	return &m, nil
 }

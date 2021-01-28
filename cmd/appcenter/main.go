@@ -4,6 +4,7 @@ import (
 	"goappcenter/appcenter"
 	"os"
 
+	"github.com/pterm/pterm"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v2"
@@ -92,11 +93,13 @@ func main() {
 	}
 
 	if err := app.Run(os.Args); err != nil {
-		panic(err)
+		log.Error().Err(err).Msg("Error during execution")
 	}
 }
 
 func executeUpload(c *cli.Context) error {
+	pterm.DefaultHeader.Println("GO AppCenter")
+
 	client := appcenter.NewClient(APIKey)
 
 	client.Config.AppName = request.AppName

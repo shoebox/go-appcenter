@@ -13,6 +13,7 @@ type uploadReeleaseResponse struct {
 	ID     string `json:"upload_id"`
 }
 
+// ReleaseUpload will release the uploaded file to AppCenter
 func (s *UploadService) ReleaseUpload(ctx context.Context, uploadID string) error {
 	log.Info().
 		Str("UploadID", uploadID).

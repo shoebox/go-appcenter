@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/rs/zerolog/log"
+	"github.com/pterm/pterm"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -44,6 +44,11 @@ func (s *UploadService) UploadChunks(
 	fileSize int64,
 	contentType string,
 ) error {
+	sp, err := pterm.DefaultSpinner.Start("Uploading chunks")
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 
 	jobc := make(chan Chunk, chunkCount)
@@ -80,7 +85,6 @@ func (s *UploadService) UploadChunks(
 		if _, err := reader.Read(c.Data); err != nil {
 			return NewAppCenterError(ChunkingError, err)
 		}
-		log.Info().Int("ChunkID", c.ID).Msg("Preparing chunk")
 
 		// sending the chunk object to the worker pool
 		jobc <- c
@@ -91,7 +95,12 @@ func (s *UploadService) UploadChunks(
 
 	wg.Wait()
 
-	return g.Wait()
+	err = g.Wait()
+	if err == nil {
+		sp.Success()
+	}
+
+	return err
 }
 
 func (s *UploadService) chunkUploadWorker(
@@ -105,17 +114,22 @@ func (s *UploadService) chunkUploadWorker(
 	defer wg.Done()
 
 	for j := range jobs {
-		log.Info().Int("Chunk ID", j.ID).Msg("Chunk upload started")
 		g.Go(func() error {
 
 			r := chunkUploadResponse{}
-			resp, err := s.client.simpleRequest(ctx, http.MethodPost, j.URL, bytes.NewBuffer(j.Data), &r)
+
+			resp, err := s.client.simpleRequest(
+				ctx,
+				http.MethodPost,
+				j.URL,
+				bytes.NewBuffer(j.Data),
+				&r,
+			)
+
 			if err != nil {
 				return err
 			} else if resp.StatusError != nil {
 				return resp.StatusError
-			} else {
-				log.Info().Int("Chunk ID", j.ID).Msg("Chunk upload complete")
 			}
 
 			return nil
