@@ -3,6 +3,7 @@ module goappcenter
 go 1.13
 
 require (
+	github.com/cirocosta/asciinema-edit v0.0.0-20190130154215-1c0971ae232a // indirect
 	github.com/cosiner/argv v0.0.1 // indirect
 	github.com/fatih/color v1.7.0
 	github.com/go-delve/delve v1.3.2 // indirect
@@ -22,5 +23,6 @@ require (
 	go.starlark.net v0.0.0-20191113183327-aaf7be003892 // indirect
 	golang.org/x/arch v0.0.0-20191101135251-a0d8588395bd // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	gopkg.in/urfave/cli.v1 v1.20.0 // indirect
 	k8s.io/apimachinery v0.20.0
 )

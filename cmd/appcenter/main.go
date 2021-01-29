@@ -24,7 +24,7 @@ func main() {
 
 	app := cli.App{
 		Name:    "go-appcenter",
-		Version: "0.1.0",
+		Version: "0.2.0",
 	}
 
 	app.Flags = []cli.Flag{
@@ -40,7 +40,8 @@ func main() {
 	app.Usage = "Upload and distribute binaries on the AppCenter platform"
 	app.Commands = []*cli.Command{
 		{
-			Name: "upload",
+			Name:        "upload",
+			Description: "Upload binary to AppCenter for distribution. And optionally distribute it",
 			Flags: []cli.Flag{
 				&cli.PathFlag{Name: "file",
 					EnvVars:     []string{"AppCenterFileName"},
