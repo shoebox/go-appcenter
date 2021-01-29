@@ -1,12 +1,11 @@
 package appcenter
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"net/http"
 
-	"github.com/fatih/color"
+	"github.com/pterm/pterm"
 )
 
 // DistributeService definition
@@ -26,62 +25,70 @@ type distributionBody struct {
 	NotifyTester    bool   `json:"notify_testers"`
 }
 
+type distributionResponse struct {
+	GroupID               string `json:"id"`
+	MandatoryUpdate       bool   `json:"mandatory_update"`
+	ProvisioningStatusURL string `json:"provisioning_status_url"`
+}
+
 // Do Distribute the designated release into the provided configuration
-func (s *DistributeService) Do(releaseID string, request UploadRequest) error {
+func (s *DistributeService) Do(ctx context.Context, releaseID int64, request UploadTask) error {
+
 	if request.Distribute.GroupName != "" {
-		color.Green("\n\tDistributing release")
-		group, err := s.requestGroup(request.Distribute.GroupName, request.OwnerName, request.AppName)
+		group, err := s.requestGroup(ctx, request.Distribute.GroupName, request.OwnerName, request.AppName)
 		if err != nil {
 			return err
 		}
 
-		err = s.releaseToGroup(request.OwnerName, request.AppName, releaseID, group.ID)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		err = s.releaseToGroup(ctx, request.OwnerName, request.AppName, releaseID, group.ID)
+		return err
 	}
 
 	return nil
 }
 
-func (s *DistributeService) requestGroup(groupName string,
+func (s *DistributeService) requestGroup(
+	ctx context.Context,
+	groupName string,
 	ownerName string,
-	appName string) (*distributionGroupResponse, error) {
+	appName string,
+) (*distributionGroupResponse, error) {
+	var res distributionGroupResponse
 
-	fmt.Println("\t\tRequesting group", groupName)
-
-	// Create Request
-	req, err := http.NewRequest("GET",
-		fmt.Sprintf("%s/apps/%s/%s/distribution_groups/%s",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			groupName), nil)
-
-	req = s.client.ApplyTokenToRequest(req)
-
+	sp, err := pterm.DefaultSpinner.Start(fmt.Sprintf("Requesting distribution group ID from name '%v'", groupName))
 	if err != nil {
-		return nil, err
+		return &res, err
 	}
 
-	// Do the request
-	response := &distributionGroupResponse{}
-	_, err = s.client.do(req, response)
-	if err != nil {
-		return nil, err
+	err = s.client.NewAPIRequest(
+		ctx,
+		http.MethodGet,
+		fmt.Sprintf("distribution_groups/%s", groupName),
+		nil,
+		&res,
+	)
+
+	if err == nil {
+		sp.UpdateText(fmt.Sprintf("Distribution group ID resolved: %v", res.ID))
+		sp.Success()
+	} else {
+		sp.Fail()
 	}
 
-	fmt.Println("\t\tGroup ID :", response.ID)
-
-	return response, nil
+	return &res, err
 }
 
-func (s *DistributeService) releaseToGroup(ownerName string,
+func (s *DistributeService) releaseToGroup(
+	ctx context.Context,
+	ownerName string,
 	appName string,
-	releaseID string,
+	releaseID int64,
 	groupID string) error {
+
+	sp, err := pterm.DefaultSpinner.Start("Releasing to group")
+	if err != nil {
+		return err
+	}
 
 	body := distributionBody{
 		ID:              groupID,
@@ -89,38 +96,17 @@ func (s *DistributeService) releaseToGroup(ownerName string,
 		NotifyTester:    false,
 	}
 
-	payload, err := json.Marshal(body)
+	r := distributionResponse{}
+
+	path := fmt.Sprintf("releases/%v/groups", releaseID)
+
+	err = s.client.NewAPIRequest(ctx, http.MethodPost, path, &body, &r)
 	if err != nil {
+		sp.Fail()
 		return err
 	}
 
-	req, err := http.NewRequest("POST",
-		fmt.Sprintf("%s/apps/%s/%s/releases/%s/groups",
-			s.client.BaseURL,
-			ownerName,
-			appName,
-			releaseID),
-		bytes.NewBuffer(payload))
+	sp.Success()
 
-	req = RequestContentTypeJson(req)
-	req = s.client.ApplyTokenToRequest(req)
-	if err != nil {
-		return err
-	}
-
-	resp, err := s.client.client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode == 201 {
-		color.Green("\tDistribution completed")
-		return nil
-	} else {
-		// TODO: Wrap better the error here
-		return fmt.Errorf("Failed to share release %v to group %v (Error : %v)",
-			releaseID,
-			groupID,
-			resp)
-	}
+	return nil
 }
